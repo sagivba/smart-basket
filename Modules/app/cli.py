@@ -12,9 +12,13 @@ from typing import TextIO
 from Modules.app.application_service import (
     AddBasketItemUseCase,
     ApplicationService,
+    ClearBasketUseCase,
     CompareBasketUseCase,
+    GetBasketStateUseCase,
     ListChainsUseCase,
     LoadPricesUseCase,
+    RemoveBasketItemUseCase,
+    UpdateBasketItemQuantityUseCase,
 )
 from Modules.data.data_loader import PriceDataLoader
 from Modules.db.database import ConnectionFactory, create_schema
@@ -275,6 +279,16 @@ def build_application_service(connection: sqlite3.Connection) -> ApplicationServ
             comparison_service=comparison_service,
         ),
         list_chains_use_case=ListChainsUseCase(chain_repository=chain_repository),
+        update_basket_item_quantity_use_case=UpdateBasketItemQuantityUseCase(
+            basket_repository=basket_repository
+        ),
+        remove_basket_item_use_case=RemoveBasketItemUseCase(
+            basket_repository=basket_repository
+        ),
+        clear_basket_use_case=ClearBasketUseCase(basket_repository=basket_repository),
+        get_basket_state_use_case=GetBasketStateUseCase(
+            basket_repository=basket_repository
+        ),
     )
 
 

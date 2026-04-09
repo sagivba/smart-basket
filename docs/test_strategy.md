@@ -282,6 +282,11 @@ Offline capability is a design constraint for MVP validation:
 
 Verification should remain evidence-based: use imports, workflows, and test commands to confirm no network dependency is required by current tests, and avoid claiming production-hardening guarantees beyond repository scope.
 
+Concrete in-repo offline verification evidence:
+
+- `tests/unit/test_offline_constraints.py` blocks network-related imports and third-party dependencies.
+- `tests/integration/test_offline_bootstrap.py` runs a full local CLI bootstrap flow (`load` -> `add-item` -> `compare`) against local fixtures and SQLite while patching `socket.create_connection` and `socket.socket.connect` to raise immediately if any network access is attempted.
+
 ### 9.1.3 Minimum verification checklist for documentation updates
 
 When updating compatibility/offline statements, verify and record:

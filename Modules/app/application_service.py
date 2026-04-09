@@ -104,10 +104,12 @@ class TransparencyDownloaderProtocol(Protocol):
     def download_files(
         self,
         target_root: str | Any,
+        chains: list[str] | None = None,
+        file_types: list[str] | None = None,
         when_date: Any = None,
         limit: int | None = None,
-        include_store_files: bool = True,
-        prefer_full_price_files: bool = True,
+        include_store_files: bool | None = None,
+        prefer_full_price_files: bool | None = None,
     ) -> Any:
         """Download raw transparency files for supported chains."""
 
@@ -121,14 +123,18 @@ class DownloadTransparencyFilesUseCase:
     def execute(
         self,
         target_root: str | Any = "data/raw/downloads",
+        chains: list[str] | None = None,
+        file_types: list[str] | None = None,
         when_date: Any = None,
         limit: int | None = None,
-        include_store_files: bool = True,
-        prefer_full_price_files: bool = True,
+        include_store_files: bool | None = None,
+        prefer_full_price_files: bool | None = None,
     ) -> Any:
         """Run the remote download workflow via the data-layer downloader."""
         return self.downloader.download_files(
             target_root=target_root,
+            chains=chains,
+            file_types=file_types,
             when_date=when_date,
             limit=limit,
             include_store_files=include_store_files,
@@ -250,14 +256,18 @@ class ApplicationService:
     def download_transparency_files(
         self,
         target_root: str | Any = "data/raw/downloads",
+        chains: list[str] | None = None,
+        file_types: list[str] | None = None,
         when_date: Any = None,
         limit: int | None = None,
-        include_store_files: bool = True,
-        prefer_full_price_files: bool = True,
+        include_store_files: bool | None = None,
+        prefer_full_price_files: bool | None = None,
     ) -> Any:
         """Execute the remote transparency-files download use case."""
         return self.download_transparency_files_use_case.execute(
             target_root=target_root,
+            chains=chains,
+            file_types=file_types,
             when_date=when_date,
             limit=limit,
             include_store_files=include_store_files,

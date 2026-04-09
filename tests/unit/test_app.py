@@ -198,10 +198,12 @@ class TestApplicationService(unittest.TestCase):
         list_chains_use_case.execute.assert_called_once_with()
         download_transparency_use_case.execute.assert_called_once_with(
             target_root="data/raw/downloads",
+            chains=None,
+            file_types=None,
             when_date=None,
             limit=2,
-            include_store_files=True,
-            prefer_full_price_files=True,
+            include_store_files=None,
+            prefer_full_price_files=None,
         )
         update_quantity_use_case.execute.assert_called_once_with(
             basket_id=88,
@@ -226,6 +228,8 @@ class TestDownloadTransparencyFilesUseCase(unittest.TestCase):
 
         result = use_case.execute(
             target_root="data/raw/downloads",
+            chains=None,
+            file_types=None,
             when_date=None,
             limit=3,
             include_store_files=True,
@@ -235,6 +239,8 @@ class TestDownloadTransparencyFilesUseCase(unittest.TestCase):
         self.assertEqual(result, expected)
         downloader.download_files.assert_called_once_with(
             target_root="data/raw/downloads",
+            chains=None,
+            file_types=None,
             when_date=None,
             limit=3,
             include_store_files=True,

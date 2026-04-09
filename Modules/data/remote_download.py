@@ -9,118 +9,180 @@ from pathlib import Path
 from typing import Any
 
 
-@dataclass(slots=True)
-class DownloadJob:
-    """Describes one deterministic remote-download operation for one chain."""
+SUPPORTED_CHAIN_ORDER = ("SHUFERSAL", "HAZI_HINAM")
+DEFAULT_FILE_TYPE_ORDER = (
+    "STORE_FILE",
+    "PRICE_FILE",
+    "PRICE_FULL_FILE",
+    "PROMO_FILE",
+    "PROMO_FULL_FILE",
+)
 
-    chain: str
+
+@dataclass(slots=True)
+class ChainDownloadRequest:
+    """Input contract for one chain-level download request."""
+
+    chain_name: str
+    file_types: list[str]
     target_directory: Path
-    selected_file_types: list[str]
     when_date: date | datetime | None = None
     limit: int | None = None
 
 
 @dataclass(slots=True)
-class DownloadedFile:
-    """Represents one file downloaded to local storage."""
+class FileDownloadAttempt:
+    """Result of attempting to download one file category for one chain."""
 
-    chain: str
+    chain_name: str
     file_type: str
-    file_name: str
-    file_path: Path
+    target_directory: Path
+    expected_file_name: str | None
+    discovered_file_name: str | None
+    success: bool
+    failure_reason: str | None
+    downloaded_file_paths: list[Path] = field(default_factory=list)
 
 
 @dataclass(slots=True)
-class DownloadResult:
-    """Structured aggregate output from one downloader run."""
+class ChainDownloadResult:
+    """Aggregated result for one chain across requested file categories."""
 
-    requested_chains: list[str]
-    selected_file_types: list[str]
-    target_root: Path
-    downloaded_files: list[DownloadedFile] = field(default_factory=list)
+    chain_name: str
+    success: bool
+    requested_file_types: list[str]
+    attempts: list[FileDownloadAttempt] = field(default_factory=list)
+    downloaded_files: list[Path] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
-    @property
-    def success(self) -> bool:
-        """Return True when no chain-level errors were recorded."""
-        return not self.errors
+
+@dataclass(slots=True)
+class DownloadBatchResult:
+    """Aggregated result for one cross-chain download run."""
+
+    requested_chains: list[str]
+    root_target_directory: Path
+    started_at: datetime
+    finished_at: datetime
+    chain_results: list[ChainDownloadResult] = field(default_factory=list)
+    total_files_downloaded: int = 0
+    total_successful_attempts: int = 0
+    total_failed_attempts: int = 0
+    success: bool = False
+    warnings: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
-class RetailerTransparencyDownloader:
-    """Downloads raw transparency files for supported chains only."""
+class RetailChainsDownloadManager:
+    """Higher-level wrapper around the upstream transparency downloader API."""
 
-    def download_files(
+    def download_chains(
         self,
         target_root: str | Path = "data/raw/downloads",
+        chains: list[str] | tuple[str, ...] | None = None,
+        file_types: list[str] | tuple[str, ...] | None = None,
         when_date: date | datetime | None = None,
         limit: int | None = None,
-        include_store_files: bool = True,
-        prefer_full_price_files: bool = True,
-    ) -> DownloadResult:
-        """Download raw files for SHUFERSAL and HAZI_HINAM using upstream package."""
-        resolved_target_root = Path(target_root)
+    ) -> DownloadBatchResult:
+        """Download requested file categories for requested supported chains."""
+        started_at = datetime.utcnow()
+        resolved_root = Path(target_root)
 
         try:
             package_api = self._load_package_api()
         except Exception as exc:
-            return DownloadResult(
-                requested_chains=["SHUFERSAL", "HAZI_HINAM"],
-                selected_file_types=[],
-                target_root=resolved_target_root,
+            finished_at = datetime.utcnow()
+            return DownloadBatchResult(
+                requested_chains=list(chains or SUPPORTED_CHAIN_ORDER),
+                root_target_directory=resolved_root,
+                started_at=started_at,
+                finished_at=finished_at,
+                total_failed_attempts=1,
+                success=False,
                 errors=[f"failed to load il-supermarket-scraper API: {exc}"],
             )
 
-        supported_chains = self._resolve_supported_chains(package_api)
-        selected_file_types = self._select_file_types(
+        resolved_chains = self._resolve_requested_chains(package_api=package_api, requested_chains=chains)
+        resolved_file_types = self._resolve_requested_file_types(
             package_api=package_api,
-            include_store_files=include_store_files,
-            prefer_full_price_files=prefer_full_price_files,
-        )
-        result = DownloadResult(
-            requested_chains=supported_chains,
-            selected_file_types=selected_file_types,
-            target_root=resolved_target_root,
+            requested_file_types=file_types,
         )
 
-        for chain_name in supported_chains:
-            chain_target = self._default_chain_target(resolved_target_root, chain_name)
-            job = DownloadJob(
-                chain=chain_name,
+        chain_results: list[ChainDownloadResult] = []
+        batch_errors: list[str] = []
+        batch_warnings: list[str] = []
+
+        for chain_name in resolved_chains:
+            chain_target = self._default_chain_target(resolved_root, chain_name)
+            chain_request = ChainDownloadRequest(
+                chain_name=chain_name,
+                file_types=list(resolved_file_types),
                 target_directory=chain_target,
-                selected_file_types=list(selected_file_types),
                 when_date=when_date,
                 limit=limit,
             )
-            try:
-                job.target_directory.mkdir(parents=True, exist_ok=True)
-                task = package_api["ScarpingTask"](
-                    enabled_scrapers=[job.chain],
-                    files_types=list(job.selected_file_types),
-                    multiprocessing=1,
-                    output_configuration={
-                        "output_mode": "disk",
-                        "base_storage_path": str(job.target_directory),
-                    },
-                )
-                task.start(limit=job.limit, when_date=job.when_date, single_pass=True)
-                task.join()
-            except Exception as exc:
-                result.errors.append(f"{job.chain}: download failed: {exc}")
-                continue
+            chain_result = self._download_chain(package_api=package_api, request=chain_request)
+            chain_results.append(chain_result)
+            batch_errors.extend(chain_result.errors)
+            batch_warnings.extend(chain_result.warnings)
 
-            result.downloaded_files.extend(
-                self._collect_downloaded_files(chain_name=job.chain, target_directory=job.target_directory)
-            )
-            if prefer_full_price_files and not any(
-                file.chain == job.chain and file.file_type == "PRICE_FULL_FILE"
-                for file in result.downloaded_files
-            ):
-                result.warnings.append(
-                    f"{job.chain}: PRICE_FULL_FILE not found; fallback PRICE_FILE was allowed"
-                )
+        finished_at = datetime.utcnow()
+        total_successful_attempts = sum(
+            1
+            for chain_result in chain_results
+            for attempt in chain_result.attempts
+            if attempt.success
+        )
+        total_failed_attempts = sum(
+            1
+            for chain_result in chain_results
+            for attempt in chain_result.attempts
+            if not attempt.success
+        )
+        total_files_downloaded = sum(len(chain_result.downloaded_files) for chain_result in chain_results)
 
-        return result
+        return DownloadBatchResult(
+            requested_chains=resolved_chains,
+            root_target_directory=resolved_root,
+            started_at=started_at,
+            finished_at=finished_at,
+            chain_results=chain_results,
+            total_files_downloaded=total_files_downloaded,
+            total_successful_attempts=total_successful_attempts,
+            total_failed_attempts=total_failed_attempts,
+            success=(total_failed_attempts == 0 and not batch_errors),
+            warnings=batch_warnings,
+            errors=batch_errors,
+        )
+
+    def render_report(self, batch_result: DownloadBatchResult) -> str:
+        """Render a deterministic human-readable report for batch results."""
+        lines = [
+            "Download batch summary",
+            f"root={batch_result.root_target_directory}",
+            f"chains={','.join(batch_result.requested_chains)}",
+            f"attempts_success={batch_result.total_successful_attempts}",
+            f"attempts_failed={batch_result.total_failed_attempts}",
+            f"files_downloaded={batch_result.total_files_downloaded}",
+            f"overall_success={batch_result.success}",
+        ]
+
+        for chain_result in batch_result.chain_results:
+            lines.append(f"[{chain_result.chain_name}] success={chain_result.success}")
+            for attempt in chain_result.attempts:
+                status = "SUCCESS" if attempt.success else "FAILED"
+                if attempt.success:
+                    path_text = ", ".join(str(path) for path in attempt.downloaded_file_paths)
+                    lines.append(
+                        f"{attempt.chain_name} | {attempt.file_type} | {status} | {path_text}"
+                    )
+                else:
+                    reason = attempt.failure_reason or "unknown failure"
+                    lines.append(
+                        f"{attempt.chain_name} | {attempt.file_type} | {status} | {reason}"
+                    )
+        return "\n".join(lines)
 
     @staticmethod
     def _load_package_api() -> dict[str, Any]:
@@ -134,12 +196,128 @@ class RetailerTransparencyDownloader:
         }
 
     @staticmethod
-    def _resolve_supported_chains(package_api: dict[str, Any]) -> list[str]:
+    def _resolve_requested_chains(
+        *,
+        package_api: dict[str, Any],
+        requested_chains: list[str] | tuple[str, ...] | None,
+    ) -> list[str]:
         scraper_factory = package_api["ScraperFactory"]
-        return [
-            getattr(scraper_factory, "SHUFERSAL"),
-            getattr(scraper_factory, "HAZI_HINAM"),
-        ]
+        supported = {
+            "SHUFERSAL": getattr(scraper_factory, "SHUFERSAL"),
+            "HAZI_HINAM": getattr(scraper_factory, "HAZI_HINAM"),
+        }
+        chain_names = list(requested_chains) if requested_chains is not None else list(SUPPORTED_CHAIN_ORDER)
+        resolved: list[str] = []
+        for chain_name in chain_names:
+            canonical = str(chain_name).upper()
+            if canonical in supported:
+                resolved.append(supported[canonical])
+        return resolved
+
+    @staticmethod
+    def _resolve_requested_file_types(
+        *,
+        package_api: dict[str, Any],
+        requested_file_types: list[str] | tuple[str, ...] | None,
+    ) -> list[str]:
+        file_types = package_api["FileTypesFilters"]
+        source_types = (
+            list(requested_file_types)
+            if requested_file_types is not None
+            else list(DEFAULT_FILE_TYPE_ORDER)
+        )
+        resolved: list[str] = []
+        for file_type_name in source_types:
+            upper_name = str(file_type_name).upper()
+            if hasattr(file_types, upper_name):
+                resolved.append(getattr(file_types, upper_name))
+        return resolved
+
+    def _download_chain(
+        self,
+        *,
+        package_api: dict[str, Any],
+        request: ChainDownloadRequest,
+    ) -> ChainDownloadResult:
+        request.target_directory.mkdir(parents=True, exist_ok=True)
+
+        attempts: list[FileDownloadAttempt] = []
+        downloaded_files: list[Path] = []
+        warnings: list[str] = []
+        errors: list[str] = []
+
+        for file_type in request.file_types:
+            before_files = self._list_files(request.target_directory)
+            try:
+                task = package_api["ScarpingTask"](
+                    enabled_scrapers=[request.chain_name],
+                    files_types=[file_type],
+                    multiprocessing=1,
+                    output_configuration={
+                        "output_mode": "disk",
+                        "base_storage_path": str(request.target_directory),
+                    },
+                )
+                task.start(limit=request.limit, when_date=request.when_date, single_pass=True)
+                task.join()
+                after_files = self._list_files(request.target_directory)
+                new_files = [path for path in after_files if path not in before_files]
+                if not new_files:
+                    failure_reason = "no files returned by upstream scraper"
+                    attempts.append(
+                        FileDownloadAttempt(
+                            chain_name=request.chain_name,
+                            file_type=file_type,
+                            target_directory=request.target_directory,
+                            expected_file_name=None,
+                            discovered_file_name=None,
+                            success=False,
+                            failure_reason=failure_reason,
+                        )
+                    )
+                    errors.append(f"{request.chain_name} {file_type}: {failure_reason}")
+                    continue
+
+                downloaded_files.extend(new_files)
+                attempts.append(
+                    FileDownloadAttempt(
+                        chain_name=request.chain_name,
+                        file_type=file_type,
+                        target_directory=request.target_directory,
+                        expected_file_name=None,
+                        discovered_file_name=new_files[0].name,
+                        success=True,
+                        failure_reason=None,
+                        downloaded_file_paths=list(new_files),
+                    )
+                )
+            except Exception as exc:  # pragma: no cover - exercised via unit tests
+                reason = str(exc)
+                attempts.append(
+                    FileDownloadAttempt(
+                        chain_name=request.chain_name,
+                        file_type=file_type,
+                        target_directory=request.target_directory,
+                        expected_file_name=None,
+                        discovered_file_name=None,
+                        success=False,
+                        failure_reason=reason,
+                    )
+                )
+                errors.append(f"{request.chain_name} {file_type}: {reason}")
+
+        if not downloaded_files:
+            warnings.append(f"{request.chain_name}: no files downloaded")
+
+        return ChainDownloadResult(
+            chain_name=request.chain_name,
+            success=all(attempt.success for attempt in attempts) if attempts else False,
+            requested_file_types=list(request.file_types),
+            attempts=attempts,
+            downloaded_files=sorted(downloaded_files),
+            warnings=warnings,
+            errors=errors,
+        )
 
     @staticmethod
     def _default_chain_target(target_root: Path, chain_name: str) -> Path:
@@ -147,55 +325,77 @@ class RetailerTransparencyDownloader:
         return target_root / slug
 
     @staticmethod
-    def _select_file_types(
+    def _list_files(target_directory: Path) -> list[Path]:
+        if not target_directory.exists():
+            return []
+        return sorted(path for path in target_directory.rglob("*") if path.is_file())
+
+
+class RetailerTransparencyDownloader:
+    """Backward-compatible façade kept for existing call sites."""
+
+    def __init__(self, manager: RetailChainsDownloadManager | None = None) -> None:
+        self._manager = manager or RetailChainsDownloadManager()
+
+    def download_files(
+        self,
+        target_root: str | Path = "data/raw/downloads",
+        chains: list[str] | tuple[str, ...] | None = None,
+        file_types: list[str] | tuple[str, ...] | None = None,
+        when_date: date | datetime | None = None,
+        limit: int | None = None,
+        include_store_files: bool | None = None,
+        prefer_full_price_files: bool | None = None,
+    ) -> DownloadBatchResult:
+        """Download chain files via the higher-level manager."""
+        resolved_file_types = file_types
+        if resolved_file_types is None and (
+            include_store_files is not None or prefer_full_price_files is not None
+        ):
+            resolved_file_types = self._resolve_legacy_file_types(
+                include_store_files=bool(include_store_files),
+                prefer_full_price_files=bool(prefer_full_price_files),
+            )
+        return self._manager.download_chains(
+            target_root=target_root,
+            chains=chains,
+            file_types=resolved_file_types,
+            when_date=when_date,
+            limit=limit,
+        )
+
+    def render_report(self, batch_result: DownloadBatchResult) -> str:
+        """Render a readable report via the underlying manager."""
+        return self._manager.render_report(batch_result)
+
+    @staticmethod
+    def _resolve_legacy_file_types(
         *,
-        package_api: dict[str, Any],
         include_store_files: bool,
         prefer_full_price_files: bool,
     ) -> list[str]:
-        file_types = package_api["FileTypesFilters"]
         selected: list[str] = []
         if include_store_files:
-            selected.append(getattr(file_types, "STORE_FILE"))
+            selected.append("STORE_FILE")
         if prefer_full_price_files:
-            selected.extend(
-                [
-                    getattr(file_types, "PRICE_FULL_FILE"),
-                    getattr(file_types, "PRICE_FILE"),
-                ]
-            )
+            selected.extend(["PRICE_FULL_FILE", "PRICE_FILE"])
         else:
-            selected.append(getattr(file_types, "PRICE_FILE"))
+            selected.append("PRICE_FILE")
         return selected
 
-    def _collect_downloaded_files(
-        self,
-        *,
-        chain_name: str,
-        target_directory: Path,
-    ) -> list[DownloadedFile]:
-        if not target_directory.exists():
-            return []
 
-        downloaded_files: list[DownloadedFile] = []
-        for file_path in sorted(path for path in target_directory.rglob("*") if path.is_file()):
-            downloaded_files.append(
-                DownloadedFile(
-                    chain=chain_name,
-                    file_type=self._detect_file_type(file_path.name),
-                    file_name=file_path.name,
-                    file_path=file_path,
-                )
-            )
-        return downloaded_files
-
-    @staticmethod
-    def _detect_file_type(file_name: str) -> str:
-        lowered = file_name.lower()
-        if "pricefull" in lowered:
-            return "PRICE_FULL_FILE"
-        if "price" in lowered:
-            return "PRICE_FILE"
-        if "store" in lowered:
-            return "STORE_FILE"
-        return "UNKNOWN"
+def download_all_supported_chains(
+    target_root: str | Path = "data/raw/downloads",
+    chains: list[str] | tuple[str, ...] | None = None,
+    file_types: list[str] | tuple[str, ...] | None = None,
+    when_date: date | datetime | None = None,
+    limit: int | None = None,
+) -> DownloadBatchResult:
+    """Convenience API for one-call download execution."""
+    return RetailChainsDownloadManager().download_chains(
+        target_root=target_root,
+        chains=chains,
+        file_types=file_types,
+        when_date=when_date,
+        limit=limit,
+    )

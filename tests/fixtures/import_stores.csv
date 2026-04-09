@@ -1,0 +1,4 @@
+chain_code,chain_name,store_code,store_name,city,address,is_active
+CHAIN_A,Chain A,STORE_1,Chain A Downtown,Tel Aviv,Main 1,true
+CHAIN_A,Chain A,STORE_2,Chain A North,Haifa,Harbor 10,true
+CHAIN_B,Chain B,STORE_9,Chain B Center,Jerusalem,Market 5,false

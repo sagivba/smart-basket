@@ -153,7 +153,7 @@
 
 ## 23. Fixtures and sample data
 - [x] Create small deterministic product fixtures
-- [ ] Create small deterministic store fixtures
+- [x] Create small deterministic store fixtures
 - [x] Create small deterministic price fixtures
 - [x] Create parser fixtures
 - [x] Create integration test fixtures

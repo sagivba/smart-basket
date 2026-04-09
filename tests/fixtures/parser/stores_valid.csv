@@ -1,0 +1,2 @@
+chain_code,chain_name,store_code,store_name,city,address,is_active
+CH01,Chain One,ST10, Store Ten , Tel Aviv , 1 Main St , true

@@ -44,11 +44,11 @@
 - [x] Add repository unit tests
 
 ## 8. PriceRepository
-- [ ] Implement price upsert
-- [ ] Implement price retrieval by product and chain
-- [ ] Implement `get_prices_for_products_by_chain()`
-- [ ] Implement the MVP representative price rule for a chain
-- [ ] Add repository unit tests *(partial: repository tests currently cover `BasketRepository` only)*
+- [x] Implement price upsert
+- [x] Implement price retrieval by product and chain
+- [x] Implement `get_prices_for_products_by_chain()`
+- [x] Implement the MVP representative price rule for a chain
+- [x] Add repository unit tests
 
 ## 9. BasketRepository
 - [x] Implement basket item persistence

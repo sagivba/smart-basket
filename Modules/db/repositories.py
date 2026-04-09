@@ -3,154 +3,152 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import date
+from decimal import Decimal
 
-from Modules.models.entities import BasketItem, Chain, Store
-
-
-class ChainRepository:
-    """Persistence operations for retail chains."""
-
-    def __init__(self, connection: sqlite3.Connection) -> None:
-        self._connection = connection
-
-    def upsert(self, chain: Chain) -> Chain:
-        """Insert or update a chain by chain_code and return the persisted entity."""
-        cursor = self._connection.execute(
-            """
-            INSERT INTO chains (chain_code, name)
-            VALUES (?, ?)
-            ON CONFLICT(chain_code) DO UPDATE SET
-                name = excluded.name
-            RETURNING id, chain_code, name
-            """,
-            (chain.chain_code, chain.name),
-        )
-        row = cursor.fetchone()
-        self._connection.commit()
-        return self._row_to_chain(row)
-
-    def get_by_chain_code(self, chain_code: str) -> Chain | None:
-        """Return a chain by its chain code."""
-        row = self._connection.execute(
-            """
-            SELECT id, chain_code, name
-            FROM chains
-            WHERE chain_code = ?
-            """,
-            (chain_code,),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._row_to_chain(row)
-
-    def get_by_id(self, chain_id: int) -> Chain | None:
-        """Return a chain by its identifier."""
-        row = self._connection.execute(
-            """
-            SELECT id, chain_code, name
-            FROM chains
-            WHERE id = ?
-            """,
-            (chain_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._row_to_chain(row)
-
-    @staticmethod
-    def _row_to_chain(row: sqlite3.Row | tuple[object, ...]) -> Chain:
-        """Map a chains row to a Chain entity."""
-        return Chain(
-            id=row[0],
-            chain_code=row[1],
-            name=row[2],
-        )
+from Modules.models.entities import BasketItem, Price
 
 
-class StoreRepository:
-    """Persistence operations for stores."""
+class PriceRepository:
+    """Persistence and retrieval operations for product prices."""
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
 
-    def upsert(self, store: Store) -> Store:
-        """Insert or update a store by chain/store identity and return the persisted entity."""
-        cursor = self._connection.execute(
+    def upsert_price(self, price: Price) -> Price:
+        """Insert or update a price row by its current MVP natural key."""
+        existing_row = self._connection.execute(
             """
-            INSERT INTO stores (chain_id, store_code, name, city, address, is_active)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(chain_id, store_code) DO UPDATE SET
-                name = excluded.name,
-                city = excluded.city,
-                address = excluded.address,
-                is_active = excluded.is_active
-            RETURNING id, chain_id, store_code, name, city, address, is_active
+            SELECT id
+            FROM prices
+            WHERE product_id = ?
+              AND chain_id = ?
+              AND store_id = ?
+              AND currency = ?
+              AND price_date = ?
             """,
             (
-                store.chain_id,
-                store.store_code,
-                store.name,
-                store.city,
-                store.address,
-                int(store.is_active),
+                price.product_id,
+                price.chain_id,
+                price.store_id,
+                price.currency,
+                price.price_date.isoformat(),
             ),
-        )
-        row = cursor.fetchone()
+        ).fetchone()
+
+        if existing_row is None:
+            cursor = self._connection.execute(
+                """
+                INSERT INTO prices (
+                    product_id,
+                    chain_id,
+                    store_id,
+                    price,
+                    currency,
+                    price_date,
+                    source_file
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    price.product_id,
+                    price.chain_id,
+                    price.store_id,
+                    str(price.price),
+                    price.currency,
+                    price.price_date.isoformat(),
+                    price.source_file,
+                ),
+            )
+            persisted_id = int(cursor.lastrowid)
+        else:
+            persisted_id = int(existing_row[0])
+            self._connection.execute(
+                """
+                UPDATE prices
+                SET price = ?,
+                    source_file = ?
+                WHERE id = ?
+                """,
+                (str(price.price), price.source_file, persisted_id),
+            )
+
         self._connection.commit()
-        return self._row_to_store(row)
+        return Price(
+            id=persisted_id,
+            product_id=price.product_id,
+            chain_id=price.chain_id,
+            store_id=price.store_id,
+            price=price.price,
+            currency=price.currency,
+            price_date=price.price_date,
+            source_file=price.source_file,
+        )
 
-    def get_by_chain_and_store_code(self, chain_id: int, store_code: str) -> Store | None:
-        """Return a store by chain identifier and store code."""
+    def get_price_by_product_and_chain(self, product_id: int, chain_id: int) -> Price | None:
+        """Return the current MVP representative chain price for one product.
+
+        MVP assumption: when no store is selected, representative chain price is
+        the minimum available store price for the product inside that chain.
+        """
         row = self._connection.execute(
             """
-            SELECT id, chain_id, store_code, name, city, address, is_active
-            FROM stores
-            WHERE chain_id = ? AND store_code = ?
+            SELECT id, product_id, chain_id, store_id, price, currency, price_date, source_file
+            FROM prices
+            WHERE product_id = ? AND chain_id = ?
+            ORDER BY CAST(price AS REAL) ASC, store_id ASC, id ASC
+            LIMIT 1
             """,
-            (chain_id, store_code),
+            (product_id, chain_id),
         ).fetchone()
         if row is None:
             return None
-        return self._row_to_store(row)
+        return self._row_to_price(row)
 
-    def get_by_id(self, store_id: int) -> Store | None:
-        """Return a store by identifier."""
-        row = self._connection.execute(
-            """
-            SELECT id, chain_id, store_code, name, city, address, is_active
-            FROM stores
-            WHERE id = ?
-            """,
-            (store_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        return self._row_to_store(row)
+    def get_prices_for_products_by_chain(
+        self, product_ids: list[int], chain_ids: list[int]
+    ) -> dict[int, dict[int, Price]]:
+        """Return representative prices keyed by chain then product.
 
-    def get_by_chain_id(self, chain_id: int) -> list[Store]:
-        """Return all stores for a chain in a deterministic order."""
+        Missing prices are represented by absent product keys in each chain map.
+        """
+        if not product_ids or not chain_ids:
+            return {}
+
+        products_placeholders = ",".join(["?"] * len(product_ids))
+        chains_placeholders = ",".join(["?"] * len(chain_ids))
+
         rows = self._connection.execute(
-            """
-            SELECT id, chain_id, store_code, name, city, address, is_active
-            FROM stores
-            WHERE chain_id = ?
-            ORDER BY store_code, id
+            f"""
+            SELECT id, product_id, chain_id, store_id, price, currency, price_date, source_file
+            FROM prices
+            WHERE product_id IN ({products_placeholders})
+              AND chain_id IN ({chains_placeholders})
+            ORDER BY chain_id ASC, product_id ASC, CAST(price AS REAL) ASC, store_id ASC, id ASC
             """,
-            (chain_id,),
+            [*product_ids, *chain_ids],
         ).fetchall()
-        return [self._row_to_store(row) for row in rows]
+
+        prices_by_chain: dict[int, dict[int, Price]] = {}
+        for row in rows:
+            price = self._row_to_price(row)
+            chain_prices = prices_by_chain.setdefault(price.chain_id, {})
+            if price.product_id not in chain_prices:
+                chain_prices[price.product_id] = price
+
+        return prices_by_chain
 
     @staticmethod
-    def _row_to_store(row: sqlite3.Row | tuple[object, ...]) -> Store:
-        """Map a stores row to a Store entity."""
-        return Store(
-            id=row[0],
-            chain_id=row[1],
-            store_code=row[2],
-            name=row[3],
-            city=row[4],
-            address=row[5],
-            is_active=bool(row[6]),
+    def _row_to_price(row: sqlite3.Row | tuple[object, ...]) -> Price:
+        """Map one `prices` row into a Price entity."""
+        return Price(
+            id=int(row[0]),
+            product_id=int(row[1]),
+            chain_id=int(row[2]),
+            store_id=int(row[3]),
+            price=Decimal(str(row[4])),
+            currency=str(row[5]),
+            price_date=date.fromisoformat(str(row[6])),
+            source_file=row[7],
         )
 
 

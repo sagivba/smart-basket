@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
 from Modules.db.database import ConnectionFactory, DatabaseManager, create_schema
-from Modules.db.repositories import BasketRepository, ChainRepository, StoreRepository
-from Modules.models.entities import BasketItem, Chain, Store
+from Modules.db.repositories import BasketRepository, PriceRepository
+from Modules.models.entities import BasketItem, Price
 
 
 class TestConnectionFactoryAndSchema(unittest.TestCase):
@@ -344,191 +346,155 @@ class TestBasketRepository(unittest.TestCase):
         self.assertEqual(basket_501_items[0].id, second.id)
 
 
-class TestChainRepository(unittest.TestCase):
+class TestPriceRepository(unittest.TestCase):
     def setUp(self) -> None:
-        self.connection = ConnectionFactory.create_connection(":memory:")
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database_path = Path(self.temp_dir.name) / "prices.db"
+        self.connection = sqlite3.connect(str(self.database_path))
         create_schema(self.connection)
-        self.repository = ChainRepository(self.connection)
+        self.repository = PriceRepository(self.connection)
+        self._seed_reference_data()
 
     def tearDown(self) -> None:
         self.connection.close()
+        self.temp_dir.cleanup()
 
-    def test_upsert_inserts_new_chain(self) -> None:
-        persisted = self.repository.upsert(Chain(id=None, chain_code="729005", name="Fresh Mart"))
-
-        self.assertIsNotNone(persisted.id)
-        self.assertEqual(persisted.chain_code, "729005")
-        self.assertEqual(persisted.name, "Fresh Mart")
-
-    def test_upsert_updates_existing_chain_by_chain_code(self) -> None:
-        first = self.repository.upsert(Chain(id=None, chain_code="729006", name="Initial Name"))
-
-        second = self.repository.upsert(Chain(id=None, chain_code="729006", name="Updated Name"))
-
-        self.assertEqual(first.id, second.id)
-        self.assertEqual(second.name, "Updated Name")
-
-        row_count = self.connection.execute(
-            "SELECT COUNT(*) FROM chains WHERE chain_code = ?",
-            ("729006",),
-        ).fetchone()[0]
-        self.assertEqual(row_count, 1)
-
-    def test_get_by_chain_code_returns_chain_on_hit(self) -> None:
-        inserted = self.repository.upsert(Chain(id=None, chain_code="729007", name="Budget Shop"))
-
-        found = self.repository.get_by_chain_code("729007")
-
-        self.assertEqual(found, inserted)
-
-    def test_get_by_chain_code_returns_none_on_miss(self) -> None:
-        self.assertIsNone(self.repository.get_by_chain_code("missing-code"))
-
-    def test_get_by_id_returns_chain_on_hit(self) -> None:
-        inserted = self.repository.upsert(Chain(id=None, chain_code="729008", name="City Market"))
-
-        found = self.repository.get_by_id(inserted.id)
-
-        self.assertEqual(found, inserted)
-
-    def test_get_by_id_returns_none_on_miss(self) -> None:
-        self.assertIsNone(self.repository.get_by_id(9999))
-
-
-class TestStoreRepository(unittest.TestCase):
-    def setUp(self) -> None:
-        self.connection = ConnectionFactory.create_connection(":memory:")
-        create_schema(self.connection)
-        self.chain_repository = ChainRepository(self.connection)
-        self.repository = StoreRepository(self.connection)
-        self.chain = self.chain_repository.upsert(
-            Chain(id=None, chain_code="729020", name="Mega Chain")
+    def _seed_reference_data(self) -> None:
+        self.connection.execute(
+            """
+            INSERT INTO products (id, barcode, name, normalized_name, brand, unit_name)
+            VALUES
+                (1, '111', 'Milk', 'milk', NULL, NULL),
+                (2, '222', 'Bread', 'bread', NULL, NULL)
+            """
         )
-        self.other_chain = self.chain_repository.upsert(
-            Chain(id=None, chain_code="729021", name="Other Chain")
+        self.connection.execute(
+            """
+            INSERT INTO chains (id, chain_code, name)
+            VALUES
+                (10, 'CHAIN-A', 'Chain A'),
+                (20, 'CHAIN-B', 'Chain B')
+            """
         )
+        self.connection.execute(
+            """
+            INSERT INTO stores (id, chain_id, store_code, name, city, address, is_active)
+            VALUES
+                (100, 10, 'A-1', 'Store A1', NULL, NULL, 1),
+                (101, 10, 'A-2', 'Store A2', NULL, NULL, 1),
+                (102, 10, 'A-3', 'Store A3', NULL, NULL, 1),
+                (200, 20, 'B-1', 'Store B1', NULL, NULL, 1)
+            """
+        )
+        self.connection.commit()
 
-    def tearDown(self) -> None:
-        self.connection.close()
-
-    def _make_store(
+    def _make_price(
         self,
         *,
+        product_id: int,
         chain_id: int,
-        store_code: str,
-        name: str,
-        city: str | None = None,
-        address: str | None = None,
-        is_active: bool = True,
-    ) -> Store:
-        return Store(
+        store_id: int,
+        price: str,
+        currency: str = "ILS",
+        price_date: date = date(2026, 4, 1),
+        source_file: str | None = "prices.csv",
+    ) -> Price:
+        return Price(
             id=None,
+            product_id=product_id,
             chain_id=chain_id,
-            store_code=store_code,
-            name=name,
-            city=city,
-            address=address,
-            is_active=is_active,
+            store_id=store_id,
+            price=Decimal(price),
+            currency=currency,
+            price_date=price_date,
+            source_file=source_file,
         )
 
-    def test_upsert_inserts_new_store(self) -> None:
-        persisted = self.repository.upsert(
-            self._make_store(
-                chain_id=self.chain.id,
-                store_code="001",
-                name="Main Branch",
-                city="Tel Aviv",
-                address="1 Herzl St",
-            )
+    def test_upsert_price_inserts_then_updates_same_mvp_natural_key(self) -> None:
+        created = self.repository.upsert_price(
+            self._make_price(product_id=1, chain_id=10, store_id=100, price="8.30")
+        )
+        updated = self.repository.upsert_price(
+            self._make_price(product_id=1, chain_id=10, store_id=100, price="7.95")
         )
 
-        self.assertIsNotNone(persisted.id)
-        self.assertEqual(persisted.chain_id, self.chain.id)
-        self.assertEqual(persisted.store_code, "001")
-        self.assertEqual(persisted.name, "Main Branch")
-
-    def test_upsert_updates_existing_store_identity_within_chain(self) -> None:
-        first = self.repository.upsert(
-            self._make_store(
-                chain_id=self.chain.id,
-                store_code="002",
-                name="Old Name",
-                city="Haifa",
-                address="Old Address",
-                is_active=True,
-            )
-        )
-
-        second = self.repository.upsert(
-            self._make_store(
-                chain_id=self.chain.id,
-                store_code="002",
-                name="New Name",
-                city="Haifa",
-                address="New Address",
-                is_active=False,
-            )
-        )
-
-        self.assertEqual(first.id, second.id)
-        self.assertEqual(second.name, "New Name")
-        self.assertEqual(second.address, "New Address")
-        self.assertFalse(second.is_active)
+        self.assertIsNotNone(created.id)
+        self.assertEqual(created.id, updated.id)
+        self.assertEqual(updated.price, Decimal("7.95"))
 
         row_count = self.connection.execute(
-            "SELECT COUNT(*) FROM stores WHERE chain_id = ? AND store_code = ?",
-            (self.chain.id, "002"),
+            """
+            SELECT COUNT(*)
+            FROM prices
+            WHERE product_id = 1 AND chain_id = 10 AND store_id = 100
+              AND currency = 'ILS' AND price_date = '2026-04-01'
+            """
+        ).fetchone()[0]
+        persisted_price = self.connection.execute(
+            "SELECT price FROM prices WHERE id = ?",
+            (updated.id,),
         ).fetchone()[0]
         self.assertEqual(row_count, 1)
+        self.assertEqual(Decimal(str(persisted_price)), Decimal("7.95"))
 
-    def test_get_by_chain_and_store_code_returns_store_on_hit(self) -> None:
-        inserted = self.repository.upsert(
-            self._make_store(chain_id=self.chain.id, store_code="003", name="Lookup Branch")
+    def test_get_price_by_product_and_chain_returns_chain_minimum_price(self) -> None:
+        self.repository.upsert_price(
+            self._make_price(product_id=1, chain_id=10, store_id=100, price="10.00")
+        )
+        self.repository.upsert_price(
+            self._make_price(product_id=1, chain_id=10, store_id=101, price="9.10")
+        )
+        self.repository.upsert_price(
+            self._make_price(product_id=1, chain_id=10, store_id=102, price="9.10")
         )
 
-        found = self.repository.get_by_chain_and_store_code(self.chain.id, "003")
+        representative_price = self.repository.get_price_by_product_and_chain(1, 10)
 
-        self.assertEqual(found, inserted)
-
-    def test_get_by_chain_and_store_code_returns_none_on_miss(self) -> None:
-        self.assertIsNone(self.repository.get_by_chain_and_store_code(self.chain.id, "999"))
-
-    def test_get_by_id_returns_store_on_hit(self) -> None:
-        inserted = self.repository.upsert(
-            self._make_store(chain_id=self.chain.id, store_code="004", name="By ID Branch")
+        self.assertIsNotNone(representative_price)
+        self.assertEqual(representative_price.price, Decimal("9.10"))
+        self.assertEqual(
+            representative_price.store_id,
+            101,
+            "tie-break remains deterministic by lower store_id",
         )
 
-        found = self.repository.get_by_id(inserted.id)
+    def test_get_price_by_product_and_chain_returns_none_when_missing(self) -> None:
+        representative_price = self.repository.get_price_by_product_and_chain(1, 10)
+        self.assertIsNone(representative_price)
 
-        self.assertEqual(found, inserted)
-
-    def test_get_by_id_returns_none_on_miss(self) -> None:
-        self.assertIsNone(self.repository.get_by_id(9999))
-
-    def test_get_by_chain_id_returns_only_chain_stores_in_deterministic_order(self) -> None:
-        self.repository.upsert(
-            self._make_store(chain_id=self.chain.id, store_code="020", name="Twenty")
+    def test_get_prices_for_products_by_chain_returns_representative_price_map(self) -> None:
+        self.repository.upsert_price(
+            self._make_price(product_id=1, chain_id=10, store_id=100, price="9.90")
         )
-        self.repository.upsert(
-            self._make_store(chain_id=self.chain.id, store_code="005", name="Five")
+        self.repository.upsert_price(
+            self._make_price(product_id=1, chain_id=10, store_id=101, price="9.50")
         )
-        self.repository.upsert(
-            self._make_store(chain_id=self.other_chain.id, store_code="001", name="Other Chain Store")
+        self.repository.upsert_price(
+            self._make_price(product_id=2, chain_id=10, store_id=100, price="5.20")
         )
-
-        chain_stores = self.repository.get_by_chain_id(self.chain.id)
-
-        self.assertEqual([store.store_code for store in chain_stores], ["005", "020"])
-        self.assertTrue(all(store.chain_id == self.chain.id for store in chain_stores))
-
-    def test_get_by_chain_id_returns_empty_list_for_chain_without_stores(self) -> None:
-        empty_chain = self.chain_repository.upsert(
-            Chain(id=None, chain_code="729022", name="No Stores")
+        self.repository.upsert_price(
+            self._make_price(product_id=1, chain_id=20, store_id=200, price="10.30")
         )
 
-        chain_stores = self.repository.get_by_chain_id(empty_chain.id)
+        prices_map = self.repository.get_prices_for_products_by_chain(
+            product_ids=[2, 1],
+            chain_ids=[20, 10],
+        )
 
-        self.assertEqual(chain_stores, [])
+        self.assertEqual(prices_map[10][1].price, Decimal("9.50"))
+        self.assertEqual(prices_map[10][2].price, Decimal("5.20"))
+        self.assertEqual(prices_map[20][1].price, Decimal("10.30"))
+        self.assertNotIn(2, prices_map[20], "missing prices stay absent from mapping")
+
+    def test_get_prices_for_products_by_chain_returns_empty_for_empty_input(self) -> None:
+        self.assertEqual(
+            self.repository.get_prices_for_products_by_chain(product_ids=[], chain_ids=[10]),
+            {},
+        )
+        self.assertEqual(
+            self.repository.get_prices_for_products_by_chain(product_ids=[1], chain_ids=[]),
+            {},
+        )
 
 
 if __name__ == "__main__":

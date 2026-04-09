@@ -1,111 +1,145 @@
-"""Unit tests for engine name-based product matching."""
+"""Unit tests for basket engine comparison and ranking flow."""
 
 from __future__ import annotations
 
 import unittest
 
-from Modules.engine.basket_engine import BasketEngine
-from Modules.models.entities import Product
-from Modules.models.results import MatchStatus
+from Modules.engine.basket_engine import BasketCalculator, BasketComparisonService
+from Modules.models.entities import BasketItem
+from Modules.models.results import ChainComparisonResult
 
 
-class TestBasketEngineNameMatching(unittest.TestCase):
-    def _product(self, *, product_id: int, name: str, normalized_name: str, barcode: str) -> Product:
-        return Product(
-            id=product_id,
-            barcode=barcode,
-            name=name,
-            normalized_name=normalized_name,
-            brand=None,
-            unit_name=None,
+class _FakeCalculator(BasketCalculator):
+    def __init__(self, results: list[ChainComparisonResult]) -> None:
+        self.results = results
+        self.received_items: list[BasketItem] | None = None
+
+    def calculate(self, basket_items: list[BasketItem]) -> list[ChainComparisonResult]:
+        self.received_items = basket_items
+        return self.results
+
+
+class TestBasketComparisonService(unittest.TestCase):
+    def _make_chain_result(
+        self,
+        *,
+        chain_id: int,
+        chain_name: str,
+        total_price: float,
+        is_complete_basket: bool,
+        missing_items_count: int,
+    ) -> ChainComparisonResult:
+        return ChainComparisonResult(
+            chain_id=chain_id,
+            chain_name=chain_name,
+            total_price=total_price,
+            found_items_count=2 - missing_items_count,
+            missing_items_count=missing_items_count,
+            is_complete_basket=is_complete_basket,
+            basket_lines=[],
+            missing_items=[],
         )
 
-    def test_unambiguous_normalized_name_match_returns_single_matched_product(self) -> None:
-        products = [
-            self._product(
-                product_id=10,
-                name="Milk 1L",
-                normalized_name="milk 1l",
-                barcode="7290000000010",
-            ),
-            self._product(
-                product_id=11,
-                name="Bread",
-                normalized_name="bread",
-                barcode="7290000000011",
-            ),
-        ]
-
-        result = BasketEngine.match_product_name("  MILK   1L ", products)
-
-        self.assertEqual(result.status, MatchStatus.MATCHED)
-        self.assertIsNotNone(result.matched_product)
-        self.assertEqual(result.matched_product.id, 10)
-        self.assertEqual(result.candidate_products, [])
-
-    def test_ambiguous_normalized_name_match_returns_candidate_list(self) -> None:
-        products = [
-            self._product(
-                product_id=40,
-                name="Tomato Paste 500g",
-                normalized_name="tomato paste 500g",
-                barcode="7290000000040",
-            ),
-            self._product(
-                product_id=30,
-                name="Tomato Paste 500G",
-                normalized_name="tomato paste 500g",
-                barcode="7290000000030",
-            ),
-        ]
-
-        result = BasketEngine.match_product_name("tomato   paste 500g", products)
-
-        self.assertEqual(result.status, MatchStatus.AMBIGUOUS)
-        self.assertIsNone(result.matched_product)
-        self.assertEqual([candidate.id for candidate in result.candidate_products], [30, 40])
-
-    def test_unknown_name_is_marked_as_unmatched(self) -> None:
-        products = [
-            self._product(
-                product_id=20,
-                name="Eggs",
-                normalized_name="eggs",
-                barcode="7290000000020",
-            )
-        ]
-
-        result = BasketEngine.match_product_name("Chocolate Bar", products)
-
-        self.assertEqual(result.status, MatchStatus.UNMATCHED)
-        self.assertIsNone(result.matched_product)
-        self.assertEqual(result.candidate_products, [])
-
-    def test_match_result_to_dict_has_deterministic_structure(self) -> None:
-        products = [
-            self._product(
-                product_id=50,
-                name="Yogurt",
-                normalized_name="yogurt",
-                barcode="7290000000050",
-            )
-        ]
-
-        result_dict = BasketEngine.match_product_name("Yogurt", products).to_dict()
-
-        self.assertEqual(
-            list(result_dict.keys()),
-            [
-                "input_name",
-                "normalized_input_name",
-                "status",
-                "matched_product",
-                "candidate_products",
-            ],
+    def _make_basket_item(self) -> BasketItem:
+        return BasketItem(
+            id=1,
+            basket_id=200,
+            product_id=10,
+            input_value="7290012345678",
+            input_type="barcode",
+            quantity=2,
+            match_status="matched",
         )
-        self.assertEqual(result_dict["input_name"], "Yogurt")
-        self.assertEqual(result_dict["normalized_input_name"], "yogurt")
-        self.assertEqual(result_dict["status"], MatchStatus.MATCHED.value)
+
+    def test_should_rank_complete_baskets_before_partial_baskets(self) -> None:
+        partial = self._make_chain_result(
+            chain_id=2,
+            chain_name="Partial Chain",
+            total_price=10.0,
+            is_complete_basket=False,
+            missing_items_count=1,
+        )
+        complete = self._make_chain_result(
+            chain_id=1,
+            chain_name="Complete Chain",
+            total_price=20.0,
+            is_complete_basket=True,
+            missing_items_count=0,
+        )
+        service = BasketComparisonService(_FakeCalculator([]))
+
+        ranked = service.rank_chains([partial, complete])
+
+        self.assertEqual([chain.chain_id for chain in ranked], [1, 2])
+
+    def test_should_rank_by_lower_total_price_within_same_completeness_group(self) -> None:
+        more_expensive = self._make_chain_result(
+            chain_id=1,
+            chain_name="Chain A",
+            total_price=25.0,
+            is_complete_basket=True,
+            missing_items_count=0,
+        )
+        cheaper = self._make_chain_result(
+            chain_id=2,
+            chain_name="Chain B",
+            total_price=19.0,
+            is_complete_basket=True,
+            missing_items_count=0,
+        )
+        service = BasketComparisonService(_FakeCalculator([]))
+
+        ranked = service.rank_chains([more_expensive, cheaper])
+
+        self.assertEqual([chain.chain_id for chain in ranked], [2, 1])
+
+    def test_compare_basket_returns_structured_ranked_result(self) -> None:
+        chain_a = self._make_chain_result(
+            chain_id=1,
+            chain_name="Chain A",
+            total_price=22.0,
+            is_complete_basket=True,
+            missing_items_count=0,
+        )
+        chain_b = self._make_chain_result(
+            chain_id=2,
+            chain_name="Chain B",
+            total_price=18.0,
+            is_complete_basket=True,
+            missing_items_count=0,
+        )
+        basket_item = self._make_basket_item()
+        calculator = _FakeCalculator([chain_a, chain_b])
+        service = BasketComparisonService(calculator)
+
+        result = service.compare_basket([basket_item], unmatched_items=["unknown item"])
+
+        self.assertEqual(calculator.received_items, [basket_item])
+        self.assertEqual([chain.chain_id for chain in result.ranked_chains], [2, 1])
+        self.assertEqual(result.unmatched_items, ["unknown item"])
+
+    def test_rank_chains_is_deterministic_when_completeness_and_price_are_equal(self) -> None:
+        first = self._make_chain_result(
+            chain_id=10,
+            chain_name="Chain Z",
+            total_price=15.0,
+            is_complete_basket=True,
+            missing_items_count=0,
+        )
+        second = self._make_chain_result(
+            chain_id=5,
+            chain_name="Chain Y",
+            total_price=15.0,
+            is_complete_basket=True,
+            missing_items_count=0,
+        )
+        service = BasketComparisonService(_FakeCalculator([]))
+
+        ranked_from_forward = service.rank_chains([first, second])
+        ranked_from_reverse = service.rank_chains([second, first])
+
+        self.assertEqual([chain.chain_id for chain in ranked_from_forward], [5, 10])
+        self.assertEqual([chain.chain_id for chain in ranked_from_reverse], [5, 10])
 
 
 if __name__ == "__main__":

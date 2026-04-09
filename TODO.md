@@ -22,13 +22,13 @@
 - [x] Implement text normalization helpers
 - [x] Implement product name normalization helpers
 - [x] Implement barcode, quantity, price, and required-field validation
-- [ ] Add unit tests for utilities and validators *(partial: text utility tests exist; validator-specific tests are missing)*
+- [x] Add unit tests for utilities and validators
 
 ## 5. SQLite connection manager and schema creation
 - [x] Implement `ConnectionFactory` and `DatabaseManager`
 - [x] Implement schema creation for `products`, `chains`, `stores`, `prices`, and `basket_items`
 - [x] Create required foreign keys and indexes
-- [ ] Add unit tests for schema creation and DB initialization *(partial: schema is exercised indirectly by loader tests, but no direct DB-manager/schema unit tests)*
+- [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
 - [ ] Implement product upsert
@@ -66,21 +66,21 @@
 ## 11. Product, store, and price file parsing
 - [x] Implement `parse_products_file()`
 - [x] Implement `parse_prices_file()`
-- [ ] Implement `parse_stores_file()`
+- [x] Implement `parse_stores_file()`
 - [x] Implement row normalization and invalid row handling *(for product/price parsing flows)*
 - [x] Add parsing unit tests with deterministic fixtures
 
 ## 12. Data loader orchestration
 - [x] Implement `LoadJob` and `LoadResult`
 - [x] Implement `PriceDataLoader`
-- [ ] Implement `load_products()`, `load_prices()`, and `load_stores()` *(partial: all three loader methods exist; `load_stores()` depends on missing `parse_stores_file()`)*
+- [x] Implement `load_products()`, `load_prices()`, and `load_stores()`
 - [x] Implement `replace` and `append` loading modes
 - [x] Add loader unit tests
 
 ## 13. Barcode-based product matching
-- [ ] Implement direct product matching by barcode *(partial: engine currently consumes pre-matched input and does not perform barcode matching itself)*
-- [ ] Mark unknown barcode items as unmatched
-- [ ] Return a consistent matching result structure
+- [ ] Implement direct product matching by barcode *(partial: matching methods are implemented in engine, but dedicated matching unit tests are still missing)*
+- [ ] Mark unknown barcode items as unmatched *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
+- [ ] Return a consistent matching result structure *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
 - [ ] Add matching unit tests
 
 ## 14. Name-based product matching
@@ -121,7 +121,7 @@
 - [x] Add application-layer unit tests
 
 ## 19. Basket management at application level
-- [ ] Implement basket item addition
+- [x] Implement basket item addition
 - [ ] Implement basket item quantity update
 - [ ] Implement basket item removal
 - [ ] Implement basket clearing
@@ -145,18 +145,18 @@
 - [ ] Ensure all new behavior is covered with `unittest` only
 
 ## 22. Integration tests
-- [ ] Implement `test_import_flow.py` *(partial: scaffold file exists with placeholder assertion only)*
-- [ ] Implement `test_basket_comparison.py` *(partial: scaffold file exists with placeholder assertion only)*
-- [ ] Add an end-to-end file-to-database loading scenario
-- [ ] Add an end-to-end basket comparison scenario
-- [ ] Add scenarios for missing items and unmatched items
+- [x] Implement `test_import_flow.py`
+- [x] Implement `test_basket_comparison.py`
+- [x] Add an end-to-end file-to-database loading scenario
+- [x] Add an end-to-end basket comparison scenario
+- [x] Add scenarios for missing items and unmatched items
 
 ## 23. Fixtures and sample data
 - [x] Create small deterministic product fixtures
 - [ ] Create small deterministic store fixtures
 - [x] Create small deterministic price fixtures
 - [x] Create parser fixtures
-- [ ] Create integration test fixtures
+- [x] Create integration test fixtures
 
 ## 24. Documentation alignment and project hardening
 - [ ] Update `README.md` with installation, run, and test instructions

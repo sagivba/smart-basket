@@ -164,7 +164,7 @@
 - [x] Update `test_strategy.md` with testing patterns and execution guidance
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
 - [x] Document Python 3.12 compatibility expectation and verification trail *(README + test-strategy now document CI target, local test command, and evidence boundaries without over-claiming runtime guarantees)*
-- [ ] Verify the system runs fully offline *(partial: offline guardrail tests exist for forbidden network imports and empty dependencies, but no end-to-end “offline environment bootstrap” verification is documented)*
+- [x] Verify the system runs fully offline *(evidence: `tests/unit/test_offline_constraints.py` guardrails + `tests/integration/test_offline_bootstrap.py` executes load/add-item/compare while `socket.create_connection` and `socket.socket.connect` are patched to fail if any network access is attempted)*
 - [ ] Verify responsibilities remain cleanly separated across layers *(partial: audited in `docs/module_guide.md`; data loader still performs direct SQL persistence instead of delegating fully to DB repositories)*
 
 ## 25. Open MVP decisions

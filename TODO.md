@@ -31,17 +31,17 @@
 - [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
-- [x] Implement product upsert
-- [x] Implement lookup by barcode
-- [x] Implement lookup by normalized name
-- [x] Implement retrieval by product IDs
-- [x] Add repository unit tests
+- [ ] Implement product upsert
+- [ ] Implement lookup by barcode
+- [ ] Implement lookup by normalized name
+- [ ] Implement retrieval by product IDs
+- [ ] Add repository unit tests
 
 ## 7. ChainRepository and StoreRepository
-- [x] Implement chain upsert and lookup operations
-- [x] Implement store upsert and lookup operations
-- [x] Implement retrieval of stores by chain
-- [x] Add repository unit tests
+- [ ] Implement chain upsert and lookup operations
+- [ ] Implement store upsert and lookup operations
+- [ ] Implement retrieval of stores by chain
+- [ ] Add repository unit tests
 
 ## 8. PriceRepository
 - [x] Implement price upsert
@@ -84,11 +84,11 @@
 - [ ] Add matching unit tests
 
 ## 14. Name-based product matching
-- [x] Implement normalized-name product matching
-- [x] Return a single match for unambiguous results
-- [x] Return candidate lists for ambiguous matches
-- [x] Mark unknown names as unmatched
-- [x] Add matching unit tests
+- [ ] Implement normalized-name product matching *(partial: matching methods are implemented in engine, but dedicated matching unit tests are still missing)*
+- [ ] Return a single match for unambiguous results *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
+- [ ] Return candidate lists for ambiguous matches *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
+- [ ] Mark unknown names as unmatched *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
+- [ ] Add matching unit tests
 
 ## 15. Basket calculation
 - [x] Implement basket item validation before calculation
@@ -160,11 +160,11 @@
 
 ## 24. Documentation alignment and project hardening
 - [x] Update `README.md` with installation, run, and test instructions
-- [ ] Update `module_guide.md` with layer boundaries and dependencies
+- [x] Update `module_guide.md` with layer boundaries and dependencies
 - [x] Update `test_strategy.md` with testing patterns and execution guidance
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
 - [x] Document Python 3.12 compatibility expectation and verification trail *(README + test-strategy now document CI target, local test command, and evidence boundaries without over-claiming runtime guarantees)*
-- [ ] Verify the system runs fully offline
+- [ ] Verify the system runs fully offline *(partial: offline guardrail tests exist for forbidden network imports and empty dependencies, but no end-to-end “offline environment bootstrap” verification is documented)*
 - [ ] Verify responsibilities remain cleanly separated across layers *(partial: audited in `docs/module_guide.md`; data loader still performs direct SQL persistence instead of delegating fully to DB repositories)*
 
 ## 25. Open MVP decisions

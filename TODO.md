@@ -91,11 +91,11 @@
 - [ ] Add matching unit tests
 
 ## 15. Basket calculation
-- [ ] Implement basket item validation before calculation
-- [ ] Implement matched product ID collection
-- [ ] Implement line price and total chain cost calculation
-- [ ] Implement found item counting
-- [ ] Add calculation unit tests
+- [x] Implement basket item validation before calculation
+- [x] Implement matched product ID collection
+- [x] Implement line price and total chain cost calculation
+- [x] Implement found item counting
+- [x] Add calculation unit tests
 
 ## 16. Missing item handling and structured result building
 - [ ] Mark missing products per chain
@@ -140,7 +140,7 @@
 - [x] Complete `test_utils.py` *(text utility coverage added)*
 - [x] Complete `test_db.py` *(BasketRepository coverage added)*
 - [x] Complete `test_data.py` *(parser infrastructure coverage added)*
-- [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*
+- [x] Complete `test_engine.py` *(basket calculation coverage added)*
 - [ ] Complete `test_app.py` *(partial: file exists, currently empty)*
 - [ ] Ensure all new behavior is covered with `unittest` only
 

@@ -113,12 +113,12 @@
 - [ ] Add unit tests for ranking and comparison behavior
 
 ## 18. Application service and use cases
-- [ ] Implement `ApplicationService`
-- [ ] Implement `LoadPricesUseCase`
-- [ ] Implement `AddBasketItemUseCase`
-- [ ] Implement `CompareBasketUseCase`
-- [ ] Implement `ListChainsUseCase`
-- [ ] Add application-layer unit tests
+- [x] Implement `ApplicationService`
+- [x] Implement `LoadPricesUseCase`
+- [x] Implement `AddBasketItemUseCase`
+- [x] Implement `CompareBasketUseCase`
+- [x] Implement `ListChainsUseCase`
+- [x] Add application-layer unit tests
 
 ## 19. Basket management at application level
 - [ ] Implement basket item addition
@@ -141,7 +141,7 @@
 - [x] Complete `test_db.py` *(BasketRepository coverage added)*
 - [x] Complete `test_data.py` *(parser infrastructure coverage added)*
 - [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*
-- [ ] Complete `test_app.py` *(partial: file exists, currently empty)*
+- [x] Complete `test_app.py` *(application-layer orchestration coverage added)*
 - [ ] Ensure all new behavior is covered with `unittest` only
 
 ## 22. Integration tests

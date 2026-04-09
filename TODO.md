@@ -160,7 +160,7 @@
 
 ## 24. Documentation alignment and project hardening
 - [ ] Update `README.md` with installation, run, and test instructions
-- [ ] Update `module_guide.md` with layer boundaries and dependencies
+- [x] Update `module_guide.md` with layer boundaries and dependencies
 - [x] Update `test_strategy.md` with testing patterns and execution guidance
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
 - [x] Document Python 3.12 compatibility expectation and verification trail *(README + test-strategy now document CI target, local test command, and evidence boundaries without over-claiming runtime guarantees)*

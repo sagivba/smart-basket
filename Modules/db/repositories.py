@@ -93,6 +93,15 @@ class BasketRepository:
         self._connection.execute("DELETE FROM basket_items WHERE id = ?", (item_id,))
         self._connection.commit()
 
+    def clear_by_basket_id(self, basket_id: int) -> int:
+        """Delete all basket items in one basket and return number of deleted rows."""
+        cursor = self._connection.execute(
+            "DELETE FROM basket_items WHERE basket_id = ?",
+            (basket_id,),
+        )
+        self._connection.commit()
+        return cursor.rowcount
+
     @staticmethod
     def _row_to_item(row: sqlite3.Row | tuple[object, ...]) -> BasketItem:
         """Map a row from basket_items to a BasketItem entity."""

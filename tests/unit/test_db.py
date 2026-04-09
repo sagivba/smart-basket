@@ -343,6 +343,44 @@ class TestBasketRepository(unittest.TestCase):
         self.assertEqual(len(basket_501_items), 1)
         self.assertEqual(basket_501_items[0].id, second.id)
 
+    def test_clear_by_basket_id_removes_all_items_for_one_basket(self) -> None:
+        self.repository.add_item(
+            self._make_item(
+                basket_id=600,
+                product_id=51,
+                input_value="basket-600-a",
+                input_type="name",
+                quantity=1,
+                match_status="matched",
+            )
+        )
+        self.repository.add_item(
+            self._make_item(
+                basket_id=600,
+                product_id=52,
+                input_value="basket-600-b",
+                input_type="name",
+                quantity=2,
+                match_status="matched",
+            )
+        )
+        self.repository.add_item(
+            self._make_item(
+                basket_id=601,
+                product_id=53,
+                input_value="basket-601-a",
+                input_type="name",
+                quantity=1,
+                match_status="matched",
+            )
+        )
+
+        deleted_count = self.repository.clear_by_basket_id(600)
+
+        self.assertEqual(deleted_count, 2)
+        self.assertEqual(self.repository.get_by_basket_id(600), [])
+        self.assertEqual(len(self.repository.get_by_basket_id(601)), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

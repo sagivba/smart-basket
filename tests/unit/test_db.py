@@ -10,8 +10,8 @@ import unittest
 from pathlib import Path
 
 from Modules.db.database import ConnectionFactory, DatabaseManager, create_schema
-from Modules.db.repositories import BasketRepository, PriceRepository
-from Modules.models.entities import BasketItem, Price
+from Modules.db.repositories import BasketRepository, PriceRepository, ProductRepository
+from Modules.models.entities import BasketItem, Price, Product
 
 
 class TestConnectionFactoryAndSchema(unittest.TestCase):
@@ -143,6 +143,137 @@ class TestDatabaseManager(unittest.TestCase):
                     """
                 ).fetchone()[0]
                 self.assertEqual(count, 5)
+
+
+class TestProductRepository(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database_path = Path(self.temp_dir.name) / "products.db"
+        self.connection = sqlite3.connect(str(self.database_path))
+        create_schema(self.connection)
+        self.repository = ProductRepository(self.connection)
+
+    def tearDown(self) -> None:
+        self.connection.close()
+        self.temp_dir.cleanup()
+
+    def _make_product(
+        self,
+        *,
+        barcode: str,
+        name: str,
+        normalized_name: str,
+        brand: str | None = None,
+        unit_name: str | None = None,
+    ) -> Product:
+        return Product(
+            id=None,
+            barcode=barcode,
+            name=name,
+            normalized_name=normalized_name,
+            brand=brand,
+            unit_name=unit_name,
+        )
+
+    def test_upsert_product_inserts_then_updates_by_barcode(self) -> None:
+        created = self.repository.upsert_product(
+            self._make_product(
+                barcode="729000000001",
+                name="Milk 1L",
+                normalized_name="milk 1l",
+                brand="Brand A",
+                unit_name="1L",
+            )
+        )
+        updated = self.repository.upsert_product(
+            self._make_product(
+                barcode="729000000001",
+                name="Milk 1 Liter",
+                normalized_name="milk 1 liter",
+                brand="Brand B",
+                unit_name="1L",
+            )
+        )
+
+        self.assertIsNotNone(created.id)
+        self.assertEqual(created.id, updated.id)
+        self.assertEqual(updated.name, "Milk 1 Liter")
+        self.assertEqual(updated.normalized_name, "milk 1 liter")
+        self.assertEqual(updated.brand, "Brand B")
+
+        row_count = self.connection.execute(
+            "SELECT COUNT(*) FROM products WHERE barcode = ?",
+            ("729000000001",),
+        ).fetchone()[0]
+        self.assertEqual(row_count, 1)
+
+    def test_get_by_barcode_returns_matching_product(self) -> None:
+        created = self.repository.upsert_product(
+            self._make_product(
+                barcode="729000000002",
+                name="Bread",
+                normalized_name="bread",
+            )
+        )
+
+        found = self.repository.get_by_barcode("729000000002")
+
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, created.id)
+        self.assertEqual(found.name, "Bread")
+
+    def test_get_by_barcode_returns_none_for_missing_barcode(self) -> None:
+        self.assertIsNone(self.repository.get_by_barcode("not-found"))
+
+    def test_get_by_normalized_name_returns_all_matching_products(self) -> None:
+        self.repository.upsert_product(
+            self._make_product(
+                barcode="729000000003",
+                name="Greek Yogurt",
+                normalized_name="yogurt",
+            )
+        )
+        self.repository.upsert_product(
+            self._make_product(
+                barcode="729000000004",
+                name="Plain Yogurt",
+                normalized_name="yogurt",
+            )
+        )
+        self.repository.upsert_product(
+            self._make_product(
+                barcode="729000000005",
+                name="Cheese",
+                normalized_name="cheese",
+            )
+        )
+
+        matches = self.repository.get_by_normalized_name("yogurt")
+
+        self.assertEqual(len(matches), 2)
+        self.assertEqual([product.normalized_name for product in matches], ["yogurt", "yogurt"])
+        self.assertEqual([product.name for product in matches], ["Greek Yogurt", "Plain Yogurt"])
+
+    def test_get_products_by_ids_returns_rows_in_requested_order(self) -> None:
+        first = self.repository.upsert_product(
+            self._make_product(
+                barcode="729000000006",
+                name="Tomato",
+                normalized_name="tomato",
+            )
+        )
+        second = self.repository.upsert_product(
+            self._make_product(
+                barcode="729000000007",
+                name="Cucumber",
+                normalized_name="cucumber",
+            )
+        )
+
+        products = self.repository.get_products_by_ids([second.id, 99999, first.id])
+
+        self.assertEqual([row["id"] for row in products], [second.id, first.id])
+        self.assertEqual([row["name"] for row in products], ["Cucumber", "Tomato"])
 
 
 class TestBasketRepository(unittest.TestCase):

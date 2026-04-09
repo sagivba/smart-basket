@@ -7,6 +7,15 @@ from datetime import date
 from decimal import Decimal
 
 from Modules.models.entities import BasketItem, Chain, Price, Product, Store
+from Modules.models.results import (
+    AVAILABILITY_STATUS_FOUND,
+    AVAILABILITY_STATUS_MISSING,
+    MATCH_STATUS_AMBIGUOUS,
+    MATCH_STATUS_MATCHED,
+    MATCH_STATUS_UNMATCHED,
+    AvailabilityStatus,
+    MatchStatus,
+)
 
 
 class TestCoreDomainEntities(unittest.TestCase):
@@ -117,6 +126,17 @@ class TestCoreDomainEntities(unittest.TestCase):
                 quantity=1.5,
                 match_status="matched",
             )
+
+
+class TestResultModelSharedConstants(unittest.TestCase):
+    def test_match_status_enum_values_use_shared_constants(self) -> None:
+        self.assertEqual(MatchStatus.MATCHED.value, MATCH_STATUS_MATCHED)
+        self.assertEqual(MatchStatus.UNMATCHED.value, MATCH_STATUS_UNMATCHED)
+        self.assertEqual(MatchStatus.AMBIGUOUS.value, MATCH_STATUS_AMBIGUOUS)
+
+    def test_availability_status_enum_values_use_shared_constants(self) -> None:
+        self.assertEqual(AvailabilityStatus.FOUND.value, AVAILABILITY_STATUS_FOUND)
+        self.assertEqual(AvailabilityStatus.MISSING.value, AVAILABILITY_STATUS_MISSING)
 
 
 if __name__ == "__main__":

@@ -27,6 +27,8 @@ print(manager.render_report(result))
 PY
 ```
 
+> `render_report(...)` is safe to call for both successful and failed runs and always returns text output.
+
 Example rendered output (failure reasons visible per chain and file type):
 
 ```text

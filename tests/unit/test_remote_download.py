@@ -5,6 +5,7 @@ from __future__ import annotations
 import tempfile
 import types
 import unittest
+from enum import Enum
 from pathlib import Path
 from unittest.mock import patch
 
@@ -44,6 +45,19 @@ class _ExplodingPath:
         raise RuntimeError("missing dependency: il_supermarket_scarper")
 
 
+class _FakeScraperFactoryEnum(Enum):
+    SHUFERSAL = "SHUFERSAL"
+    HAZI_HINAM = "HAZI_HINAM"
+
+
+class _FakeFileTypesEnum(Enum):
+    STORE_FILE = "STORE_FILE"
+    PRICE_FILE = "PRICE_FILE"
+    PRICE_FULL_FILE = "PRICE_FULL_FILE"
+    PROMO_FILE = "PROMO_FILE"
+    PROMO_FULL_FILE = "PROMO_FULL_FILE"
+
+
 def _patch_imports(behavior: dict[tuple[str, str], str]):
     fake_scraper_factory = types.SimpleNamespace(SHUFERSAL="SHUFERSAL", HAZI_HINAM="HAZI_HINAM")
     fake_file_types = types.SimpleNamespace(
@@ -68,7 +82,76 @@ def _patch_imports(behavior: dict[tuple[str, str], str]):
     return patch("Modules.data.remote_download.importlib.import_module", side_effect=fake_import)
 
 
+def _patch_imports_with_enums(
+    behavior: dict[tuple[str, str], str],
+    *,
+    fail_on_enum_input: bool = False,
+    thread_error: Exception | None = None,
+):
+    class _EnumAwareTask:
+        def __init__(self, behavior: dict[tuple[str, str], str], **kwargs):
+            self._behavior = behavior
+            self.kwargs = kwargs
+            self.thread_exceptions = [thread_error] if thread_error is not None else []
+            scraper = kwargs["enabled_scrapers"][0]
+            file_type = kwargs["files_types"][0]
+            if fail_on_enum_input and (isinstance(scraper, Enum) or isinstance(file_type, Enum)):
+                raise KeyError(scraper)
+
+        def start(self, limit=None, when_date=None, single_pass=True):
+            _ = (limit, when_date, single_pass)
+
+        def join(self):
+            if self.thread_exceptions:
+                return
+            chain_name = self.kwargs["enabled_scrapers"][0]
+            file_type = self.kwargs["files_types"][0]
+            chain_key = chain_name if isinstance(chain_name, str) else chain_name.name
+            file_type_key = file_type if isinstance(file_type, str) else file_type.name
+            action = self._behavior.get((chain_key, file_type_key), "success")
+            if action == "empty":
+                return
+            base = Path(self.kwargs["output_configuration"]["base_storage_path"])
+            (base / f"{chain_key}_{file_type_key}.xml").write_text("ok", encoding="utf-8")
+
+    def fake_import(name: str):
+        if name == "il_supermarket_scarper":
+            return types.SimpleNamespace(
+                ScarpingTask=lambda **kwargs: _EnumAwareTask(behavior=behavior, **kwargs)
+            )
+        if name == "il_supermarket_scarper.scrappers_factory":
+            return types.SimpleNamespace(ScraperFactory=_FakeScraperFactoryEnum)
+        if name == "il_supermarket_scarper.utils.file_types":
+            return types.SimpleNamespace(FileTypesFilters=_FakeFileTypesEnum)
+        raise ImportError(name)
+
+    return patch("Modules.data.remote_download.importlib.import_module", side_effect=fake_import)
+
+
 class TestRetailChainsDownloadManager(unittest.TestCase):
+    def test_resolve_requested_chains_normalizes_enum_inputs_to_strings(self) -> None:
+        manager = RetailChainsDownloadManager()
+        package_api = {"ScraperFactory": _FakeScraperFactoryEnum}
+        resolved = manager._resolve_requested_chains(
+            package_api=package_api,
+            requested_chains=[_FakeScraperFactoryEnum.SHUFERSAL, "hazi_hinam"],
+        )
+        self.assertEqual(resolved, ["SHUFERSAL", "HAZI_HINAM"])
+
+    def test_upstream_receives_strings_not_enum_members(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports_with_enums({}, fail_on_enum_input=True):
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=[_FakeScraperFactoryEnum.SHUFERSAL],
+                file_types=[_FakeFileTypesEnum.STORE_FILE],
+            )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.requested_chains, ["SHUFERSAL"])
+        self.assertEqual(result.chain_results[0].attempts[0].chain_name, "SHUFERSAL")
+        self.assertEqual(result.chain_results[0].attempts[0].file_type, "STORE_FILE")
+
     def test_success_flow_for_one_chain(self) -> None:
         manager = RetailChainsDownloadManager()
         with tempfile.TemporaryDirectory() as temp_dir, _patch_imports({}):
@@ -144,6 +227,20 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
         self.assertIn("- PROMO_FULL_FILE: FAILED | reason=no files returned by upstream scraper", report)
         self.assertIn("- STORE_FILE: SUCCESS | paths=", report)
 
+    def test_render_report_never_crashes_with_unexpected_values(self) -> None:
+        manager = RetailChainsDownloadManager()
+        batch_result = DownloadBatchResult(
+            requested_chains=[_FakeScraperFactoryEnum.SHUFERSAL],
+            root_target_directory=Path("/tmp/any"),
+            started_at=None,  # type: ignore[arg-type]
+            finished_at=None,  # type: ignore[arg-type]
+            chain_results=[],
+            success=False,
+        )
+        report = manager.render_report(batch_result)
+        self.assertIsInstance(report, str)
+        self.assertIn("chains=SHUFERSAL", report)
+
     def test_render_report_two_chains_partial_failure_with_separate_reasons(self) -> None:
         manager = RetailChainsDownloadManager()
         behavior = {
@@ -183,6 +280,64 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
         self.assertIn("- CHAIN_INIT: FAILED | reason=runtimeerror: missing dependency: il_supermarket_scarper", report)
         self.assertIn("- STORE_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: missing dependency: il_supermarket_scarper", report)
         self.assertIn("- PRICE_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: missing dependency: il_supermarket_scarper", report)
+
+    def test_invalid_scraper_identifier_is_normalized(self) -> None:
+        manager = RetailChainsDownloadManager()
+
+        class _BadTask:
+            def __init__(self, **kwargs):
+                _ = kwargs
+                raise KeyError("<ScraperFactory.SHUFERSAL>")
+
+        package_api = {
+            "ScarpingTask": _BadTask,
+            "ScraperFactory": _FakeScraperFactoryEnum,
+            "FileTypesFilters": _FakeFileTypesEnum,
+        }
+        with tempfile.TemporaryDirectory() as temp_dir, patch.object(
+            manager,
+            "_load_package_api",
+            return_value=package_api,
+        ):
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL"],
+                file_types=["STORE_FILE"],
+            )
+
+        self.assertFalse(result.success)
+        self.assertIn("invalid scraper identifier passed to upstream package", result.chain_results[0].errors[0])
+        self.assertEqual(
+            result.chain_results[0].attempts[0].failure_detail.exception_class_name,
+            "KeyError",
+        )
+
+    def test_background_thread_errors_are_captured_as_failures(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports_with_enums(
+            {},
+            thread_error=RuntimeError("thread timeout"),
+        ):
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL"],
+                file_types=["STORE_FILE"],
+            )
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.total_failed_attempts, 1)
+        self.assertIn("thread timeout", result.chain_results[0].attempts[0].failure_reason)
+
+    def test_join_over_requested_chains_never_crashes(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports_with_enums({}, fail_on_enum_input=True):
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=[_FakeScraperFactoryEnum.SHUFERSAL],
+                file_types=["STORE_FILE"],
+            )
+            report = manager.render_report(result)
+        self.assertIn("chains=SHUFERSAL", report)
 
     def test_deterministic_folder_layout(self) -> None:
         manager = RetailChainsDownloadManager()

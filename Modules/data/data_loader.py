@@ -10,6 +10,7 @@ import sqlite3
 from typing import Any, Literal
 
 from Modules.data import parser
+from Modules.db.repositories import DataImportRepository
 
 LoadMode = Literal["append", "replace"]
 
@@ -47,8 +48,13 @@ class LoadResult:
 class PriceDataLoader:
     """Coordinates parser output persistence into SQLite tables."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        import_repository: DataImportRepository | None = None,
+    ) -> None:
         self._connection = connection
+        self._import_repository = import_repository or DataImportRepository(connection)
 
     def load_products(self, source_path: str | Path, mode: LoadMode = "append") -> LoadResult:
         """Load products from a source file into the products table."""
@@ -65,7 +71,7 @@ class PriceDataLoader:
         self._validate_mode(mode)
         with self._connection:
             if mode == "replace":
-                self._connection.execute("DELETE FROM products")
+                self._import_repository.replace_products()
 
             for record in records:
                 try:
@@ -74,18 +80,12 @@ class PriceDataLoader:
                     normalized_name = self._record_value(record, "normalized_name")
                     brand = self._record_value(record, "brand", required=False)
                     unit_name = self._record_value(record, "unit_name", required=False)
-                    self._connection.execute(
-                        """
-                        INSERT INTO products (barcode, name, normalized_name, brand, unit_name)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(barcode)
-                        DO UPDATE SET
-                            name = excluded.name,
-                            normalized_name = excluded.normalized_name,
-                            brand = excluded.brand,
-                            unit_name = excluded.unit_name
-                        """,
-                        (barcode, name, normalized_name, brand, unit_name),
+                    self._import_repository.upsert_product(
+                        barcode=barcode,
+                        name=name,
+                        normalized_name=normalized_name,
+                        brand=brand,
+                        unit_name=unit_name,
                     )
                     result.accepted_count += 1
                 except (KeyError, sqlite3.DatabaseError, TypeError, ValueError) as exc:
@@ -109,7 +109,7 @@ class PriceDataLoader:
         self._validate_mode(mode)
         with self._connection:
             if mode == "replace":
-                self._connection.execute("DELETE FROM stores")
+                self._import_repository.replace_stores()
 
             for record in records:
                 try:
@@ -121,42 +121,17 @@ class PriceDataLoader:
                     address = self._record_value(record, "address", required=False)
                     is_active = self._as_bool(self._record_value(record, "is_active", required=False), default=True)
 
-                    self._connection.execute(
-                        """
-                        INSERT INTO chains (chain_code, name)
-                        VALUES (?, ?)
-                        ON CONFLICT(chain_code)
-                        DO UPDATE SET name = excluded.name
-                        """,
-                        (chain_code, chain_name),
+                    chain_id = self._import_repository.upsert_chain(
+                        chain_code=chain_code,
+                        name=chain_name,
                     )
-
-                    chain_id_row = self._connection.execute(
-                        "SELECT id FROM chains WHERE chain_code = ?",
-                        (chain_code,),
-                    ).fetchone()
-                    if chain_id_row is None:
-                        raise ValueError(f"missing chain after upsert: {chain_code}")
-
-                    self._connection.execute(
-                        """
-                        INSERT INTO stores (chain_id, store_code, name, city, address, is_active)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(chain_id, store_code)
-                        DO UPDATE SET
-                            name = excluded.name,
-                            city = excluded.city,
-                            address = excluded.address,
-                            is_active = excluded.is_active
-                        """,
-                        (
-                            int(chain_id_row[0]),
-                            store_code,
-                            store_name,
-                            city,
-                            address,
-                            1 if is_active else 0,
-                        ),
+                    self._import_repository.upsert_store(
+                        chain_id=chain_id,
+                        store_code=store_code,
+                        name=store_name,
+                        city=city,
+                        address=address,
+                        is_active=is_active,
                     )
                     result.accepted_count += 1
                 except (KeyError, sqlite3.DatabaseError, TypeError, ValueError) as exc:
@@ -180,7 +155,7 @@ class PriceDataLoader:
         self._validate_mode(mode)
         with self._connection:
             if mode == "replace":
-                self._connection.execute("DELETE FROM prices")
+                self._import_repository.replace_prices()
 
             for record in records:
                 try:
@@ -191,24 +166,20 @@ class PriceDataLoader:
                     currency = self._record_value(record, "currency")
                     price_date_text = self._record_value(record, "price_date_text", "price_date")
 
-                    product_id = self._lookup_id("products", "barcode", barcode)
-                    chain_id = self._lookup_id("chains", "chain_code", chain_code)
-                    store_id = self._lookup_store_id(chain_id, store_code)
-
-                    self._connection.execute(
-                        """
-                        INSERT INTO prices (product_id, chain_id, store_id, price, currency, price_date, source_file)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            product_id,
-                            chain_id,
-                            store_id,
-                            self._as_decimal(price_text),
-                            currency,
-                            self._as_date_iso(price_date_text),
-                            str(job.source_path),
-                        ),
+                    product_id = self._import_repository.get_product_id_by_barcode(barcode)
+                    chain_id = self._import_repository.get_chain_id_by_code(chain_code)
+                    store_id = self._import_repository.get_store_id(
+                        chain_id=chain_id,
+                        store_code=store_code,
+                    )
+                    self._import_repository.insert_price(
+                        product_id=product_id,
+                        chain_id=chain_id,
+                        store_id=store_id,
+                        price=self._as_decimal(price_text),
+                        currency=currency,
+                        price_date=self._as_date_iso(price_date_text),
+                        source_file=str(job.source_path),
                     )
                     result.accepted_count += 1
                 except (KeyError, sqlite3.DatabaseError, TypeError, ValueError) as exc:
@@ -306,24 +277,6 @@ class PriceDataLoader:
         if required:
             raise KeyError(f"missing required field(s): {', '.join(keys)}")
         return None
-
-    def _lookup_id(self, table: str, key: str, value: str) -> int:
-        row = self._connection.execute(
-            f"SELECT id FROM {table} WHERE {key} = ?",
-            (value,),
-        ).fetchone()
-        if row is None:
-            raise ValueError(f"{table[:-1]} not found for {key}={value}")
-        return int(row[0])
-
-    def _lookup_store_id(self, chain_id: int, store_code: str) -> int:
-        row = self._connection.execute(
-            "SELECT id FROM stores WHERE chain_id = ? AND store_code = ?",
-            (chain_id, store_code),
-        ).fetchone()
-        if row is None:
-            raise ValueError(f"store not found for chain_id={chain_id}, store_code={store_code}")
-        return int(row[0])
 
     @staticmethod
     def _as_decimal(value: str) -> str:

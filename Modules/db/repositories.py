@@ -198,6 +198,143 @@ class StoreRepository:
         )
 
 
+class DataImportRepository:
+    """Persistence operations used by data-loading orchestration."""
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+
+    def replace_products(self) -> None:
+        """Delete all rows from products for deterministic replace loads."""
+        self._connection.execute("DELETE FROM products")
+
+    def upsert_product(
+        self,
+        *,
+        barcode: str,
+        name: str,
+        normalized_name: str,
+        brand: str | None,
+        unit_name: str | None,
+    ) -> None:
+        """Insert or update one product row by barcode."""
+        self._connection.execute(
+            """
+            INSERT INTO products (barcode, name, normalized_name, brand, unit_name)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(barcode)
+            DO UPDATE SET
+                name = excluded.name,
+                normalized_name = excluded.normalized_name,
+                brand = excluded.brand,
+                unit_name = excluded.unit_name
+            """,
+            (barcode, name, normalized_name, brand, unit_name),
+        )
+
+    def replace_stores(self) -> None:
+        """Delete all rows from stores for deterministic replace loads."""
+        self._connection.execute("DELETE FROM stores")
+
+    def upsert_chain(self, *, chain_code: str, name: str) -> int:
+        """Insert or update one chain and return its identifier."""
+        self._connection.execute(
+            """
+            INSERT INTO chains (chain_code, name)
+            VALUES (?, ?)
+            ON CONFLICT(chain_code)
+            DO UPDATE SET name = excluded.name
+            """,
+            (chain_code, name),
+        )
+        row = self._connection.execute(
+            "SELECT id FROM chains WHERE chain_code = ?",
+            (chain_code,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"missing chain after upsert: {chain_code}")
+        return int(row[0])
+
+    def upsert_store(
+        self,
+        *,
+        chain_id: int,
+        store_code: str,
+        name: str,
+        city: str | None,
+        address: str | None,
+        is_active: bool,
+    ) -> None:
+        """Insert or update one store row by (chain_id, store_code)."""
+        self._connection.execute(
+            """
+            INSERT INTO stores (chain_id, store_code, name, city, address, is_active)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(chain_id, store_code)
+            DO UPDATE SET
+                name = excluded.name,
+                city = excluded.city,
+                address = excluded.address,
+                is_active = excluded.is_active
+            """,
+            (chain_id, store_code, name, city, address, 1 if is_active else 0),
+        )
+
+    def replace_prices(self) -> None:
+        """Delete all rows from prices for deterministic replace loads."""
+        self._connection.execute("DELETE FROM prices")
+
+    def get_product_id_by_barcode(self, barcode: str) -> int:
+        """Return product id for a barcode or raise when missing."""
+        row = self._connection.execute(
+            "SELECT id FROM products WHERE barcode = ?",
+            (barcode,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"product not found for barcode={barcode}")
+        return int(row[0])
+
+    def get_chain_id_by_code(self, chain_code: str) -> int:
+        """Return chain id for a chain code or raise when missing."""
+        row = self._connection.execute(
+            "SELECT id FROM chains WHERE chain_code = ?",
+            (chain_code,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"chain not found for chain_code={chain_code}")
+        return int(row[0])
+
+    def get_store_id(self, *, chain_id: int, store_code: str) -> int:
+        """Return store id for a chain/store code pair or raise when missing."""
+        row = self._connection.execute(
+            "SELECT id FROM stores WHERE chain_id = ? AND store_code = ?",
+            (chain_id, store_code),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"store not found for chain_id={chain_id}, store_code={store_code}")
+        return int(row[0])
+
+    def insert_price(
+        self,
+        *,
+        product_id: int,
+        chain_id: int,
+        store_id: int,
+        price: str,
+        currency: str,
+        price_date: str,
+        source_file: str,
+    ) -> None:
+        """Insert one price row."""
+        self._connection.execute(
+            """
+            INSERT INTO prices (product_id, chain_id, store_id, price, currency, price_date, source_file)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (product_id, chain_id, store_id, price, currency, price_date, source_file),
+        )
+
+
 class PriceRepository:
     """Persistence and retrieval operations for product prices."""
 

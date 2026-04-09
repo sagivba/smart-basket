@@ -491,5 +491,58 @@ class TestPriceDataLoader(unittest.TestCase):
         self.assertTrue(any("bad source data" in message for message in result.errors))
 
 
+class _NoSqlConnection:
+    def __enter__(self) -> "_NoSqlConnection":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+class _SpyImportRepository:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    def upsert_product(
+        self,
+        *,
+        barcode: str,
+        name: str,
+        normalized_name: str,
+        brand: str | None,
+        unit_name: str | None,
+    ) -> None:
+        self.calls.append(("upsert_product", (barcode, name, normalized_name, brand, unit_name)))
+
+
+class TestPriceDataLoaderLayerBoundaries(unittest.TestCase):
+    def test_load_products_delegates_persistence_to_import_repository(self) -> None:
+        repository = _SpyImportRepository()
+        loader = PriceDataLoader(_NoSqlConnection(), import_repository=repository)
+        parsed_products = [
+            {
+                "barcode": "100",
+                "product_name": "Delegated Product",
+                "normalized_name": "delegated product",
+                "brand": "Brand",
+                "unit_name": "1pc",
+            }
+        ]
+
+        with patch(
+            "Modules.data.data_loader.parser.parse_products_file",
+            return_value=(parsed_products, None),
+            create=True,
+        ):
+            result = loader.load_products("products.csv", mode="append")
+
+        self.assertEqual(result.accepted_count, 1)
+        self.assertEqual(result.rejected_count, 0)
+        self.assertEqual(
+            repository.calls,
+            [("upsert_product", ("100", "Delegated Product", "delegated product", "Brand", "1pc"))],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

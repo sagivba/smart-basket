@@ -168,8 +168,8 @@
 - [ ] Verify responsibilities remain cleanly separated across layers *(partial: audited in `docs/module_guide.md`; data loader still performs direct SQL persistence instead of delegating fully to DB repositories)*
 
 ## 25. Open MVP decisions
-- [ ] Finalize the representative chain price rule
-- [ ] Finalize the ambiguous match handling policy
-- [ ] Finalize whether the basket is memory-only or also persisted
-- [ ] Finalize the partial-calculation policy for unmatched items
-- [ ] Finalize whether the CLI is part of MVP or immediately after MVP
+- [x] Representative chain price rule — **implemented**: repository queries pick the minimum store price per chain/product (deterministic tie-break), with unit-test coverage for single-price and multi-product map behavior.
+- [ ] Ambiguous match handling policy — **partial**: engine and CLI mark ambiguous name matches without auto-selecting a product and persist `match_status="ambiguous"` with `product_id=NULL`; candidate lists exist in engine match output but are not carried through persisted basket/app-level result contracts.
+- [x] Basket persistence policy — **implemented**: basket items are persisted in SQLite (`basket_items` schema + repository CRUD), and application/CLI flows read and write persisted basket state by `basket_id`.
+- [x] Partial-calculation policy for unmatched items — **implemented**: unmatched inputs are excluded from chain total calculations, returned separately as `unmatched_items`, and missing-per-chain reporting stays independent.
+- [x] CLI scope in MVP — **implemented**: a basic CLI entry point (`load`, `add-item`, `compare`) is present and covered by dedicated unit/integration tests.

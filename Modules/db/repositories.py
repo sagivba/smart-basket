@@ -280,6 +280,28 @@ class DataImportRepository:
             (chain_id, store_code, name, city, address, 1 if is_active else 0),
         )
 
+    def upsert_store_with_chain(
+        self,
+        *,
+        chain_code: str,
+        chain_name: str,
+        store_code: str,
+        store_name: str,
+        city: str | None,
+        address: str | None,
+        is_active: bool,
+    ) -> None:
+        """Upsert one chain/store pair using chain/store natural keys."""
+        chain_id = self.upsert_chain(chain_code=chain_code, name=chain_name)
+        self.upsert_store(
+            chain_id=chain_id,
+            store_code=store_code,
+            name=store_name,
+            city=city,
+            address=address,
+            is_active=is_active,
+        )
+
     def replace_prices(self) -> None:
         """Delete all rows from prices for deterministic replace loads."""
         self._connection.execute("DELETE FROM prices")
@@ -332,6 +354,31 @@ class DataImportRepository:
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (product_id, chain_id, store_id, price, currency, price_date, source_file),
+        )
+
+    def insert_price_by_codes(
+        self,
+        *,
+        barcode: str,
+        chain_code: str,
+        store_code: str,
+        price: str,
+        currency: str,
+        price_date: str,
+        source_file: str,
+    ) -> None:
+        """Insert one price row by resolving product/chain/store identifiers."""
+        product_id = self.get_product_id_by_barcode(barcode)
+        chain_id = self.get_chain_id_by_code(chain_code)
+        store_id = self.get_store_id(chain_id=chain_id, store_code=store_code)
+        self.insert_price(
+            product_id=product_id,
+            chain_id=chain_id,
+            store_id=store_id,
+            price=price,
+            currency=currency,
+            price_date=price_date,
+            source_file=source_file,
         )
 
 

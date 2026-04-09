@@ -121,14 +121,11 @@ class PriceDataLoader:
                     address = self._record_value(record, "address", required=False)
                     is_active = self._as_bool(self._record_value(record, "is_active", required=False), default=True)
 
-                    chain_id = self._import_repository.upsert_chain(
+                    self._import_repository.upsert_store_with_chain(
                         chain_code=chain_code,
-                        name=chain_name,
-                    )
-                    self._import_repository.upsert_store(
-                        chain_id=chain_id,
+                        chain_name=chain_name,
                         store_code=store_code,
-                        name=store_name,
+                        store_name=store_name,
                         city=city,
                         address=address,
                         is_active=is_active,
@@ -166,16 +163,10 @@ class PriceDataLoader:
                     currency = self._record_value(record, "currency")
                     price_date_text = self._record_value(record, "price_date_text", "price_date")
 
-                    product_id = self._import_repository.get_product_id_by_barcode(barcode)
-                    chain_id = self._import_repository.get_chain_id_by_code(chain_code)
-                    store_id = self._import_repository.get_store_id(
-                        chain_id=chain_id,
+                    self._import_repository.insert_price_by_codes(
+                        barcode=barcode,
+                        chain_code=chain_code,
                         store_code=store_code,
-                    )
-                    self._import_repository.insert_price(
-                        product_id=product_id,
-                        chain_id=chain_id,
-                        store_id=store_id,
                         price=self._as_decimal(price_text),
                         currency=currency,
                         price_date=self._as_date_iso(price_date_text),

@@ -514,6 +514,42 @@ class _SpyImportRepository:
     ) -> None:
         self.calls.append(("upsert_product", (barcode, name, normalized_name, brand, unit_name)))
 
+    def upsert_store_with_chain(
+        self,
+        *,
+        chain_code: str,
+        chain_name: str,
+        store_code: str,
+        store_name: str,
+        city: str | None,
+        address: str | None,
+        is_active: bool,
+    ) -> None:
+        self.calls.append(
+            (
+                "upsert_store_with_chain",
+                (chain_code, chain_name, store_code, store_name, city, address, is_active),
+            )
+        )
+
+    def insert_price_by_codes(
+        self,
+        *,
+        barcode: str,
+        chain_code: str,
+        store_code: str,
+        price: str,
+        currency: str,
+        price_date: str,
+        source_file: str,
+    ) -> None:
+        self.calls.append(
+            (
+                "insert_price_by_codes",
+                (barcode, chain_code, store_code, price, currency, price_date, source_file),
+            )
+        )
+
 
 class TestPriceDataLoaderLayerBoundaries(unittest.TestCase):
     def test_load_products_delegates_persistence_to_import_repository(self) -> None:
@@ -541,6 +577,63 @@ class TestPriceDataLoaderLayerBoundaries(unittest.TestCase):
         self.assertEqual(
             repository.calls,
             [("upsert_product", ("100", "Delegated Product", "delegated product", "Brand", "1pc"))],
+        )
+
+    def test_load_stores_delegates_persistence_to_import_repository(self) -> None:
+        repository = _SpyImportRepository()
+        loader = PriceDataLoader(_NoSqlConnection(), import_repository=repository)
+        parsed_stores = [
+            {
+                "chain_code": "CH1",
+                "chain_name": "Chain One",
+                "store_code": "S1",
+                "store_name": "Store One",
+                "city": "City A",
+                "address": "Address A",
+                "is_active": True,
+            }
+        ]
+
+        with patch(
+            "Modules.data.data_loader.parser.parse_stores_file",
+            return_value=(parsed_stores, None),
+            create=True,
+        ):
+            result = loader.load_stores("stores.csv", mode="append")
+
+        self.assertEqual(result.accepted_count, 1)
+        self.assertEqual(result.rejected_count, 0)
+        self.assertEqual(
+            repository.calls,
+            [("upsert_store_with_chain", ("CH1", "Chain One", "S1", "Store One", "City A", "Address A", True))],
+        )
+
+    def test_load_prices_delegates_persistence_to_import_repository(self) -> None:
+        repository = _SpyImportRepository()
+        loader = PriceDataLoader(_NoSqlConnection(), import_repository=repository)
+        parsed_prices = [
+            {
+                "barcode": "111",
+                "chain_code": "CH1",
+                "store_code": "S1",
+                "price_text": "10.50",
+                "currency": "ILS",
+                "price_date_text": "2026-04-09",
+            }
+        ]
+
+        with patch(
+            "Modules.data.data_loader.parser.parse_prices_file",
+            return_value=(parsed_prices, None),
+            create=True,
+        ):
+            result = loader.load_prices("prices.csv", mode="append")
+
+        self.assertEqual(result.accepted_count, 1)
+        self.assertEqual(result.rejected_count, 0)
+        self.assertEqual(
+            repository.calls,
+            [("insert_price_by_codes", ("111", "CH1", "S1", "10.50", "ILS", "2026-04-09", "prices.csv"))],
         )
 
 

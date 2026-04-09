@@ -165,7 +165,7 @@
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
 - [x] Document Python 3.12 compatibility expectation and verification trail *(README + test-strategy now document CI target, local test command, and evidence boundaries without over-claiming runtime guarantees)*
 - [x] Verify the system runs fully offline *(evidence: `tests/unit/test_offline_constraints.py` guardrails + `tests/integration/test_offline_bootstrap.py` executes load/add-item/compare while `socket.create_connection` and `socket.socket.connect` are patched to fail if any network access is attempted)*
-- [ ] Verify responsibilities remain cleanly separated across layers *(partial: audited in `docs/module_guide.md`; data loader still performs direct SQL persistence instead of delegating fully to DB repositories)*
+- [x] Verify responsibilities remain cleanly separated across layers *(implemented: `PriceDataLoader` now delegates store and price persistence through `DataImportRepository` methods (`upsert_store_with_chain`, `insert_price_by_codes`) and boundary-focused unit tests verify delegation for products/stores/prices without SQL-capable connections.)*
 
 ## 25. Open MVP decisions
 - [x] Representative chain price rule — **implemented**: repository queries pick the minimum store price per chain/product (deterministic tie-break), with unit-test coverage for single-price and multi-product map behavior.

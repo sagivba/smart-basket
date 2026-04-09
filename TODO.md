@@ -122,11 +122,11 @@
 
 ## 19. Basket management at application level
 - [x] Implement basket item addition
-- [ ] Implement basket item quantity update
-- [ ] Implement basket item removal
-- [ ] Implement basket clearing
-- [ ] Implement current basket state retrieval
-- [ ] Add unit tests
+- [x] Implement basket item quantity update
+- [x] Implement basket item removal
+- [x] Implement basket clearing
+- [x] Implement current basket state retrieval
+- [x] Add unit tests
 
 ## 20. Basic CLI
 - [ ] Create a basic CLI entry point

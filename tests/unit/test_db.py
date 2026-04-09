@@ -1,209 +1,213 @@
-"""Unit tests for DB repositories."""
+"""Unit tests for database repositories."""
 
 from __future__ import annotations
 
 import sqlite3
 import unittest
 
-from Modules.db.repositories import ChainRepository, StoreRepository
-from Modules.models.entities import Chain, Store
+from Modules.db.repositories import BasketRepository
+from Modules.models.entities import BasketItem
 
 
-class TestChainAndStoreRepositories(unittest.TestCase):
+class TestBasketRepository(unittest.TestCase):
     def setUp(self) -> None:
         self.connection = sqlite3.connect(":memory:")
-        self.connection.execute("PRAGMA foreign_keys = ON")
-
         self.connection.execute(
             """
-            CREATE TABLE chains (
+            CREATE TABLE basket_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                chain_code TEXT NOT NULL UNIQUE,
-                name TEXT NOT NULL
+                basket_id INTEGER NOT NULL,
+                product_id INTEGER NULL,
+                input_value TEXT NOT NULL,
+                input_type TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                match_status TEXT NOT NULL
             )
             """
         )
-        self.connection.execute(
-            """
-            CREATE TABLE stores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                chain_id INTEGER NOT NULL,
-                store_code TEXT NOT NULL,
-                name TEXT NOT NULL,
-                city TEXT,
-                address TEXT,
-                is_active INTEGER NOT NULL DEFAULT 1,
-                UNIQUE(chain_id, store_code),
-                FOREIGN KEY(chain_id) REFERENCES chains(id)
-            )
-            """
-        )
-
-        self.chain_repository = ChainRepository(self.connection)
-        self.store_repository = StoreRepository(self.connection)
+        self.repository = BasketRepository(self.connection)
 
     def tearDown(self) -> None:
         self.connection.close()
 
-    def test_insert_chain(self) -> None:
-        created = self.chain_repository.upsert_chain(Chain(id=None, chain_code="CH01", name="Chain One"))
-
-        self.assertIsNotNone(created.id)
-        self.assertEqual(created.chain_code, "CH01")
-        self.assertEqual(created.name, "Chain One")
-
-    def test_update_existing_chain_through_upsert(self) -> None:
-        self.chain_repository.upsert_chain(Chain(id=None, chain_code="CH01", name="Chain One"))
-
-        updated = self.chain_repository.upsert_chain(
-            Chain(id=None, chain_code="CH01", name="Chain One Updated")
+    def _make_item(
+        self,
+        *,
+        basket_id: int,
+        product_id: int | None,
+        input_value: str,
+        input_type: str,
+        quantity: int,
+        match_status: str,
+    ) -> BasketItem:
+        return BasketItem(
+            id=None,
+            basket_id=basket_id,
+            product_id=product_id,
+            input_value=input_value,
+            input_type=input_type,
+            quantity=quantity,
+            match_status=match_status,
         )
 
-        self.assertEqual(updated.chain_code, "CH01")
-        self.assertEqual(updated.name, "Chain One Updated")
-        self.assertEqual(
-            self.connection.execute("SELECT COUNT(*) FROM chains WHERE chain_code = 'CH01'").fetchone()[0],
-            1,
+    def test_add_item_persists_basket_item(self) -> None:
+        item = self._make_item(
+            basket_id=100,
+            product_id=11,
+            input_value="7290011111111",
+            input_type="barcode",
+            quantity=2,
+            match_status="matched",
         )
 
-    def test_lookup_chain_by_chain_code_returns_expected_chain(self) -> None:
-        created = self.chain_repository.upsert_chain(Chain(id=None, chain_code="CH01", name="Chain One"))
+        saved = self.repository.add_item(item)
 
-        found = self.chain_repository.get_by_chain_code("CH01")
+        self.assertIsNotNone(saved.id)
+        self.assertEqual(saved.basket_id, 100)
+        self.assertEqual(saved.product_id, 11)
 
-        self.assertIsNotNone(found)
-        assert found is not None
-        self.assertEqual(found.id, created.id)
-        self.assertEqual(found.name, "Chain One")
+        persisted_rows = self.connection.execute(
+            "SELECT COUNT(*) FROM basket_items WHERE basket_id = ?", (100,)
+        ).fetchone()
+        self.assertEqual(persisted_rows[0], 1)
 
-    def test_lookup_missing_chain_code_returns_none(self) -> None:
-        self.assertIsNone(self.chain_repository.get_by_chain_code("DOES_NOT_EXIST"))
-
-    def test_insert_store(self) -> None:
-        chain = self.chain_repository.upsert_chain(Chain(id=None, chain_code="CH01", name="Chain One"))
-
-        created = self.store_repository.upsert_store(
-            Store(
-                id=None,
-                chain_id=chain.id,
-                store_code="ST01",
-                name="Store One",
-                city="New York",
-                address="1 Main St",
-                is_active=True,
+    def test_get_by_basket_id_returns_only_requested_basket_items(self) -> None:
+        self.repository.add_item(
+            self._make_item(
+                basket_id=200,
+                product_id=11,
+                input_value="milk",
+                input_type="name",
+                quantity=1,
+                match_status="matched",
+            )
+        )
+        self.repository.add_item(
+            self._make_item(
+                basket_id=200,
+                product_id=12,
+                input_value="bread",
+                input_type="name",
+                quantity=2,
+                match_status="matched",
+            )
+        )
+        self.repository.add_item(
+            self._make_item(
+                basket_id=201,
+                product_id=13,
+                input_value="eggs",
+                input_type="name",
+                quantity=1,
+                match_status="matched",
             )
         )
 
-        self.assertIsNotNone(created.id)
-        self.assertEqual(created.chain_id, chain.id)
-        self.assertEqual(created.store_code, "ST01")
+        basket_items = self.repository.get_by_basket_id(200)
 
-    def test_update_existing_store_through_upsert(self) -> None:
-        chain = self.chain_repository.upsert_chain(Chain(id=None, chain_code="CH01", name="Chain One"))
-        self.store_repository.upsert_store(
-            Store(
-                id=None,
-                chain_id=chain.id,
-                store_code="ST01",
-                name="Store One",
-                city="New York",
-                address="1 Main St",
-                is_active=True,
+        self.assertEqual(len(basket_items), 2)
+        self.assertTrue(all(item.basket_id == 200 for item in basket_items))
+        self.assertEqual([item.input_value for item in basket_items], ["milk", "bread"])
+
+    def test_get_by_basket_id_returns_empty_list_for_missing_basket(self) -> None:
+        basket_items = self.repository.get_by_basket_id(999)
+
+        self.assertEqual(basket_items, [])
+
+    def test_update_item_updates_existing_row_fields(self) -> None:
+        created = self.repository.add_item(
+            self._make_item(
+                basket_id=300,
+                product_id=21,
+                input_value="old milk",
+                input_type="name",
+                quantity=1,
+                match_status="unmatched",
             )
         )
 
-        updated = self.store_repository.upsert_store(
-            Store(
-                id=None,
-                chain_id=chain.id,
-                store_code="ST01",
-                name="Store One Updated",
-                city="Boston",
-                address="2 Main St",
-                is_active=False,
+        updated = BasketItem(
+            id=created.id,
+            basket_id=301,
+            product_id=22,
+            input_value="new milk",
+            input_type="barcode",
+            quantity=3,
+            match_status="matched",
+        )
+
+        self.repository.update_item(updated)
+
+        row = self.connection.execute(
+            """
+            SELECT basket_id, product_id, input_value, input_type, quantity, match_status
+            FROM basket_items
+            WHERE id = ?
+            """,
+            (created.id,),
+        ).fetchone()
+
+        self.assertEqual(row, (301, 22, "new milk", "barcode", 3, "matched"))
+
+    def test_delete_item_removes_only_targeted_row(self) -> None:
+        first = self.repository.add_item(
+            self._make_item(
+                basket_id=400,
+                product_id=31,
+                input_value="item-a",
+                input_type="name",
+                quantity=1,
+                match_status="matched",
+            )
+        )
+        second = self.repository.add_item(
+            self._make_item(
+                basket_id=400,
+                product_id=32,
+                input_value="item-b",
+                input_type="name",
+                quantity=1,
+                match_status="matched",
             )
         )
 
-        self.assertEqual(updated.name, "Store One Updated")
-        self.assertEqual(updated.city, "Boston")
-        self.assertFalse(updated.is_active)
-        self.assertEqual(
-            self.connection.execute(
-                "SELECT COUNT(*) FROM stores WHERE chain_id = ? AND store_code = ?",
-                (chain.id, "ST01"),
-            ).fetchone()[0],
-            1,
-        )
+        self.repository.delete_item(first.id)
 
-    def test_lookup_store_by_chain_and_store_code_returns_expected_store(self) -> None:
-        chain = self.chain_repository.upsert_chain(Chain(id=None, chain_code="CH01", name="Chain One"))
-        created = self.store_repository.upsert_store(
-            Store(
-                id=None,
-                chain_id=chain.id,
-                store_code="ST01",
-                name="Store One",
-                city="New York",
-                address="1 Main St",
-                is_active=True,
+        rows = self.connection.execute(
+            "SELECT id, input_value FROM basket_items ORDER BY id"
+        ).fetchall()
+        self.assertEqual(rows, [(second.id, "item-b")])
+
+    def test_delete_one_item_does_not_affect_other_baskets(self) -> None:
+        first = self.repository.add_item(
+            self._make_item(
+                basket_id=500,
+                product_id=41,
+                input_value="basket-500-item",
+                input_type="name",
+                quantity=1,
+                match_status="matched",
+            )
+        )
+        second = self.repository.add_item(
+            self._make_item(
+                basket_id=501,
+                product_id=42,
+                input_value="basket-501-item",
+                input_type="name",
+                quantity=1,
+                match_status="matched",
             )
         )
 
-        found = self.store_repository.get_by_chain_and_store_code(chain.id, "ST01")
+        self.repository.delete_item(first.id)
 
-        self.assertIsNotNone(found)
-        assert found is not None
-        self.assertEqual(found.id, created.id)
-        self.assertEqual(found.name, "Store One")
+        basket_500_items = self.repository.get_by_basket_id(500)
+        basket_501_items = self.repository.get_by_basket_id(501)
 
-    def test_lookup_missing_store_returns_none(self) -> None:
-        chain = self.chain_repository.upsert_chain(Chain(id=None, chain_code="CH01", name="Chain One"))
-
-        self.assertIsNone(self.store_repository.get_by_chain_and_store_code(chain.id, "MISSING"))
-
-    def test_retrieval_of_stores_by_chain_returns_only_matching_stores(self) -> None:
-        chain_one = self.chain_repository.upsert_chain(Chain(id=None, chain_code="CH01", name="Chain One"))
-        chain_two = self.chain_repository.upsert_chain(Chain(id=None, chain_code="CH02", name="Chain Two"))
-
-        self.store_repository.upsert_store(
-            Store(
-                id=None,
-                chain_id=chain_one.id,
-                store_code="ST01",
-                name="Chain One - Store One",
-                city="New York",
-                address="1 Main St",
-                is_active=True,
-            )
-        )
-        self.store_repository.upsert_store(
-            Store(
-                id=None,
-                chain_id=chain_one.id,
-                store_code="ST02",
-                name="Chain One - Store Two",
-                city="New York",
-                address="2 Main St",
-                is_active=True,
-            )
-        )
-        self.store_repository.upsert_store(
-            Store(
-                id=None,
-                chain_id=chain_two.id,
-                store_code="ST99",
-                name="Chain Two - Store One",
-                city="Chicago",
-                address="9 State St",
-                is_active=True,
-            )
-        )
-
-        stores_for_chain_one = self.store_repository.get_by_chain(chain_one.id)
-
-        self.assertEqual(len(stores_for_chain_one), 2)
-        self.assertTrue(all(store.chain_id == chain_one.id for store in stores_for_chain_one))
-        self.assertEqual([store.store_code for store in stores_for_chain_one], ["ST01", "ST02"])
+        self.assertEqual(basket_500_items, [])
+        self.assertEqual(len(basket_501_items), 1)
+        self.assertEqual(basket_501_items[0].id, second.id)
 
 
 if __name__ == "__main__":

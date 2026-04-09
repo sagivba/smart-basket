@@ -1,168 +1,122 @@
+"""Unit tests for core domain entities."""
+
+from __future__ import annotations
+
 import unittest
+from datetime import date
+from decimal import Decimal
 
-from Modules.models.results import (
-    AvailabilityStatus,
-    BasketComparisonResult,
-    BasketLineResult,
-    ChainComparisonResult,
-    MatchStatus,
-)
+from Modules.models.entities import BasketItem, Chain, Price, Product, Store
 
 
-class TestEnums(unittest.TestCase):
-    def test_match_status_values(self) -> None:
-        self.assertEqual(MatchStatus.MATCHED.value, "matched")
-        self.assertEqual(MatchStatus.UNMATCHED.value, "unmatched")
-        self.assertEqual(MatchStatus.AMBIGUOUS.value, "ambiguous")
-
-    def test_availability_status_values(self) -> None:
-        self.assertEqual(AvailabilityStatus.FOUND.value, "found")
-        self.assertEqual(AvailabilityStatus.MISSING.value, "missing")
-
-
-class TestBasketLineResult(unittest.TestCase):
-    def test_valid_construction(self) -> None:
-        result = BasketLineResult(
-            product_id=101,
-            product_name="Milk",
-            barcode="1234567890123",
-            quantity=2,
-            unit_price=3.5,
-            line_price=7.0,
-            availability_status=AvailabilityStatus.FOUND,
+class TestCoreDomainEntities(unittest.TestCase):
+    def test_product_valid_construction_and_trimming(self) -> None:
+        product = Product(
+            id=1,
+            barcode=" 7290012345678 ",
+            name="  Milk  ",
+            normalized_name=" milk ",
+            brand="  DairyCo ",
+            unit_name=" 1L ",
         )
 
-        self.assertEqual(result.product_id, 101)
-        self.assertEqual(result.quantity, 2)
-        self.assertEqual(result.line_price, 7.0)
+        self.assertEqual(product.barcode, "7290012345678")
+        self.assertEqual(product.name, "Milk")
+        self.assertEqual(product.normalized_name, "milk")
+        self.assertEqual(product.brand, "DairyCo")
+        self.assertEqual(product.unit_name, "1L")
 
-    def test_raises_for_non_positive_quantity(self) -> None:
-        with self.assertRaises(ValueError):
-            BasketLineResult(
-                product_id=1,
-                product_name="Bread",
-                barcode="111",
-                quantity=0,
-                unit_price=2.0,
-                line_price=2.0,
-                availability_status=AvailabilityStatus.FOUND,
-            )
+    def test_chain_valid_construction(self) -> None:
+        chain = Chain(id=1, chain_code=" CH01 ", name="  Best Chain ")
 
-    def test_raises_for_negative_prices(self) -> None:
-        with self.assertRaises(ValueError):
-            BasketLineResult(
-                product_id=1,
-                product_name="Bread",
-                barcode="111",
-                quantity=1,
-                unit_price=-1.0,
-                line_price=1.0,
-                availability_status=AvailabilityStatus.FOUND,
-            )
+        self.assertEqual(chain.chain_code, "CH01")
+        self.assertEqual(chain.name, "Best Chain")
 
-        with self.assertRaises(ValueError):
-            BasketLineResult(
-                product_id=1,
-                product_name="Bread",
-                barcode="111",
-                quantity=1,
-                unit_price=1.0,
-                line_price=-1.0,
-                availability_status=AvailabilityStatus.FOUND,
-            )
-
-
-class TestChainComparisonResult(unittest.TestCase):
-    def _line(self) -> BasketLineResult:
-        return BasketLineResult(
-            product_id=1,
-            product_name="Milk",
-            barcode="123",
-            quantity=1,
-            unit_price=5.0,
-            line_price=5.0,
-            availability_status=AvailabilityStatus.FOUND,
-        )
-
-    def test_valid_construction(self) -> None:
-        result = ChainComparisonResult(
-            chain_id=10,
-            chain_name="Chain A",
-            total_price=5.0,
-            found_items_count=1,
-            missing_items_count=0,
-            is_complete_basket=True,
-            basket_lines=[self._line()],
-            missing_items=[],
-        )
-
-        self.assertEqual(result.chain_id, 10)
-        self.assertTrue(result.is_complete_basket)
-        self.assertEqual(len(result.basket_lines), 1)
-
-    def test_raises_for_negative_total_price(self) -> None:
-        with self.assertRaises(ValueError):
-            ChainComparisonResult(
-                chain_id=1,
-                chain_name="Chain A",
-                total_price=-0.01,
-                found_items_count=0,
-                missing_items_count=0,
-                is_complete_basket=True,
-            )
-
-    def test_raises_for_negative_counts(self) -> None:
-        with self.assertRaises(ValueError):
-            ChainComparisonResult(
-                chain_id=1,
-                chain_name="Chain A",
-                total_price=0.0,
-                found_items_count=-1,
-                missing_items_count=0,
-                is_complete_basket=False,
-            )
-
-        with self.assertRaises(ValueError):
-            ChainComparisonResult(
-                chain_id=1,
-                chain_name="Chain A",
-                total_price=0.0,
-                found_items_count=0,
-                missing_items_count=-1,
-                is_complete_basket=False,
-            )
-
-    def test_raises_for_incoherent_complete_basket_state(self) -> None:
-        with self.assertRaises(ValueError):
-            ChainComparisonResult(
-                chain_id=1,
-                chain_name="Chain A",
-                total_price=0.0,
-                found_items_count=1,
-                missing_items_count=1,
-                is_complete_basket=True,
-                missing_items=["Eggs"],
-            )
-
-
-class TestBasketComparisonResult(unittest.TestCase):
-    def test_valid_construction(self) -> None:
-        chain_result = ChainComparisonResult(
+    def test_store_valid_construction(self) -> None:
+        store = Store(
+            id=1,
             chain_id=1,
-            chain_name="Chain A",
-            total_price=10.0,
-            found_items_count=2,
-            missing_items_count=0,
-            is_complete_basket=True,
+            store_code=" S001 ",
+            name="  Main Branch ",
+            city="  New York ",
+            address=" 123 Main St ",
+            is_active=True,
         )
 
-        result = BasketComparisonResult(
-            ranked_chains=[chain_result],
-            unmatched_items=["unknown barcode"],
+        self.assertEqual(store.store_code, "S001")
+        self.assertEqual(store.name, "Main Branch")
+        self.assertEqual(store.city, "New York")
+        self.assertEqual(store.address, "123 Main St")
+        self.assertTrue(store.is_active)
+
+    def test_price_valid_construction_and_trimming(self) -> None:
+        price = Price(
+            id=1,
+            product_id=10,
+            chain_id=5,
+            store_id=8,
+            price=" 14.90 ",
+            currency=" ILS ",
+            price_date=date(2026, 4, 9),
+            source_file=" prices.csv ",
         )
 
-        self.assertEqual(len(result.ranked_chains), 1)
-        self.assertEqual(result.unmatched_items, ["unknown barcode"])
+        self.assertEqual(price.price, Decimal("14.90"))
+        self.assertEqual(price.currency, "ILS")
+        self.assertEqual(price.source_file, "prices.csv")
+
+    def test_price_rejects_negative_values(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must not be negative"):
+            Price(
+                id=1,
+                product_id=10,
+                chain_id=5,
+                store_id=8,
+                price="-0.01",
+                currency="USD",
+                price_date=date(2026, 4, 9),
+                source_file=None,
+            )
+
+    def test_basket_item_valid_construction_and_trimming(self) -> None:
+        basket_item = BasketItem(
+            id=1,
+            basket_id=33,
+            product_id=10,
+            input_value=" 7290012345678 ",
+            input_type=" barcode ",
+            quantity=2,
+            match_status=" matched ",
+        )
+
+        self.assertEqual(basket_item.input_value, "7290012345678")
+        self.assertEqual(basket_item.input_type, "barcode")
+        self.assertEqual(basket_item.match_status, "matched")
+        self.assertEqual(basket_item.quantity, 2)
+
+    def test_basket_item_rejects_non_positive_quantity(self) -> None:
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            BasketItem(
+                id=1,
+                basket_id=33,
+                product_id=10,
+                input_value="7290012345678",
+                input_type="barcode",
+                quantity=0,
+                match_status="matched",
+            )
+
+    def test_basket_item_rejects_non_integer_quantity(self) -> None:
+        with self.assertRaisesRegex(TypeError, "integer"):
+            BasketItem(
+                id=1,
+                basket_id=33,
+                product_id=10,
+                input_value="milk",
+                input_type="name",
+                quantity=1.5,
+                match_status="matched",
+            )
 
 
 if __name__ == "__main__":

@@ -10,8 +10,14 @@ import unittest
 from pathlib import Path
 
 from Modules.db.database import ConnectionFactory, DatabaseManager, create_schema
-from Modules.db.repositories import BasketRepository, DataImportRepository, PriceRepository
-from Modules.models.entities import BasketItem, Price
+from Modules.db.repositories import (
+    BasketRepository,
+    ChainRepository,
+    DataImportRepository,
+    PriceRepository,
+    StoreRepository,
+)
+from Modules.models.entities import BasketItem, Chain, Price, Store
 
 
 class TestConnectionFactoryAndSchema(unittest.TestCase):

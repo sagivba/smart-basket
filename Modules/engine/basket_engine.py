@@ -8,6 +8,7 @@ from numbers import Real
 from typing import Any, Protocol
 
 from Modules.models.entities import BasketItem
+from Modules.utils.text_utils import normalize_product_name
 from Modules.models.results import (
     AvailabilityStatus,
     BasketComparisonResult,
@@ -15,6 +16,7 @@ from Modules.models.results import (
     ChainComparisonResult,
     MatchStatus,
 )
+from Modules.utils.text_utils import normalize_product_name
 
 
 class BasketEngine:

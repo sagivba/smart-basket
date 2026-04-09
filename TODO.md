@@ -1,11 +1,11 @@
 # TODO
 
 ## 1. Repository scaffold and project docs
-- [ ] Create the base directory structure
-- [ ] Add all package `__init__.py` files
-- [ ] Add `README.md`, `AGENTS.md`, `.env.example`, and minimal `requirements.txt`
-- [ ] Add `docs/system_spec.md`, `docs/module_guide.md`, and `docs/test_strategy.md`
-- [ ] Add `data/raw`, `data/samples`, `data/generated`, and `tests/fixtures`
+- [ ] Create the base directory structure *(partial: `Modules/`, `docs/`, and `tests/` exist; `data/` is missing)*
+- [x] Add all package `__init__.py` files
+- [ ] Add `README.md`, `AGENTS.md`, `.env.example`, and minimal `requirements.txt` *(partial: files exist, but `README.md`, `.env.example`, and `requirements.txt` are empty)*
+- [ ] Add `docs/system_spec.md`, `docs/module_guide.md`, and `docs/test_strategy.md` *(partial: files exist, but currently empty)*
+- [ ] Add `data/raw`, `data/samples`, `data/generated`, and `tests/fixtures` *(partial: `tests/fixtures` exists; `data/` subdirectories are missing)*
 
 ## 2. Core domain entities
 - [ ] Implement `Product`, `Chain`, `Store`, `Price`, and `BasketItem`
@@ -136,17 +136,17 @@
 - [ ] Add CLI-level tests if applicable
 
 ## 21. Unit tests by module
-- [ ] Complete `test_models.py`
-- [ ] Complete `test_utils.py`
-- [ ] Complete `test_db.py`
-- [ ] Complete `test_data.py`
-- [ ] Complete `test_engine.py`
-- [ ] Complete `test_app.py`
+- [ ] Complete `test_models.py` *(partial: file exists, currently empty)*
+- [ ] Complete `test_utils.py` *(partial: file exists, currently empty)*
+- [ ] Complete `test_db.py` *(partial: file exists, currently empty)*
+- [ ] Complete `test_data.py` *(partial: file exists, currently empty)*
+- [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*
+- [ ] Complete `test_app.py` *(partial: file exists, currently empty)*
 - [ ] Ensure all new behavior is covered with `unittest` only
 
 ## 22. Integration tests
-- [ ] Implement `test_import_flow.py`
-- [ ] Implement `test_basket_comparison.py`
+- [ ] Implement `test_import_flow.py` *(missing: `tests/integration/` not present)*
+- [ ] Implement `test_basket_comparison.py` *(missing: `tests/integration/` not present)*
 - [ ] Add an end-to-end file-to-database loading scenario
 - [ ] Add an end-to-end basket comparison scenario
 - [ ] Add scenarios for missing items and unmatched items
@@ -156,7 +156,7 @@
 - [ ] Create small deterministic store fixtures
 - [ ] Create small deterministic price fixtures
 - [ ] Create parser fixtures
-- [ ] Create integration test fixtures
+- [ ] Create integration test fixtures *(blocked: `tests/integration/` not present)*
 
 ## 24. Documentation alignment and project hardening
 - [ ] Update `README.md` with installation, run, and test instructions

@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 from Modules.db.database import ConnectionFactory, DatabaseManager, create_schema
-from Modules.db.repositories import BasketRepository, PriceRepository
+from Modules.db.repositories import BasketRepository, DataImportRepository, PriceRepository
 from Modules.models.entities import BasketItem, Price
 
 
@@ -314,6 +314,7 @@ class TestBasketRepository(unittest.TestCase):
         ).fetchall()
         self.assertEqual(rows, [(second.id, "item-b")])
 
+
     def test_delete_one_item_does_not_affect_other_baskets(self) -> None:
         first = self.repository.add_item(
             self._make_item(
@@ -382,6 +383,55 @@ class TestBasketRepository(unittest.TestCase):
         self.assertEqual(deleted_count, 2)
         self.assertEqual(self.repository.get_by_basket_id(600), [])
         self.assertEqual(len(self.repository.get_by_basket_id(601)), 1)
+
+
+class TestDataImportRepository(unittest.TestCase):
+    def setUp(self) -> None:
+        self.connection = sqlite3.connect(":memory:")
+        create_schema(self.connection)
+        self.repository = DataImportRepository(self.connection)
+
+    def tearDown(self) -> None:
+        self.connection.close()
+
+    def test_upsert_product_persists_and_updates_by_barcode(self) -> None:
+        self.repository.upsert_product(
+            barcode="123",
+            name="Milk",
+            normalized_name="milk",
+            brand="BrandA",
+            unit_name="1L",
+        )
+        self.repository.upsert_product(
+            barcode="123",
+            name="Milk Updated",
+            normalized_name="milk updated",
+            brand=None,
+            unit_name=None,
+        )
+
+        row = self.connection.execute(
+            "SELECT barcode, name, normalized_name, brand, unit_name FROM products WHERE barcode = ?",
+            ("123",),
+        ).fetchone()
+        self.assertEqual(row, ("123", "Milk Updated", "milk updated", None, None))
+
+    def test_upsert_chain_and_store_supports_loader_lookup_flow(self) -> None:
+        chain_id = self.repository.upsert_chain(chain_code="CH1", name="Chain One")
+        self.repository.upsert_store(
+            chain_id=chain_id,
+            store_code="S1",
+            name="Store One",
+            city="City",
+            address="Address",
+            is_active=True,
+        )
+
+        loaded_chain_id = self.repository.get_chain_id_by_code("CH1")
+        loaded_store_id = self.repository.get_store_id(chain_id=loaded_chain_id, store_code="S1")
+
+        self.assertEqual(loaded_chain_id, chain_id)
+        self.assertGreater(loaded_store_id, 0)
 
 
 class TestPriceRepository(unittest.TestCase):

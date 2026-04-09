@@ -165,7 +165,7 @@
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
 - [x] Document Python 3.12 compatibility expectation and verification trail *(README + test-strategy now document CI target, local test command, and evidence boundaries without over-claiming runtime guarantees)*
 - [ ] Verify the system runs fully offline *(partial: offline guardrail tests exist for forbidden network imports and empty dependencies, but no end-to-end “offline environment bootstrap” verification is documented)*
-- [ ] Verify responsibilities remain cleanly separated across layers *(partial: audited in `docs/module_guide.md`; data loader still performs direct SQL persistence instead of delegating fully to DB repositories)*
+- [x] Verify responsibilities remain cleanly separated across layers *(data loader now delegates concrete persistence and lookup operations to `Modules/db/repositories.py::DataImportRepository`; unit + integration tests pass after the delegation fix)*
 
 ## 25. Open MVP decisions
 - [ ] Finalize the representative chain price rule

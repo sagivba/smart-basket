@@ -1,3 +1,2 @@
-# This project currently uses only Python standard-library modules
-# (e.g., sqlite3, pathlib, re, dataclasses, unittest).
-# No third-party packages are required for runtime or tests.
+# Runtime dependency for optional remote transparency-file downloads.
+il-supermarket-scraper==1.0.0

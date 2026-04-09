@@ -14,6 +14,7 @@ from Modules.app.application_service import (
     ApplicationService,
     ClearBasketUseCase,
     CompareBasketUseCase,
+    DownloadTransparencyFilesUseCase,
     GetBasketStateUseCase,
     ListChainsUseCase,
     LoadPricesUseCase,
@@ -52,6 +53,17 @@ class CliLoadDispatcher:
         if load_request.entity == "prices":
             return self._data_loader.load_prices(load_request.source_path, load_request.mode)
         raise ValueError(f"unsupported entity: {load_request.entity}")
+
+
+class CliTransparencyDownloader:
+    """CLI adapter placeholder for optional remote downloader integration."""
+
+    def download_files(self, **_: object) -> dict[str, object]:
+        return {
+            "success": False,
+            "warnings": ["remote downloader is not wired into CLI commands yet"],
+            "errors": [],
+        }
 
 
 class SqliteChainReadRepository:
@@ -279,6 +291,9 @@ def build_application_service(connection: sqlite3.Connection) -> ApplicationServ
             comparison_service=comparison_service,
         ),
         list_chains_use_case=ListChainsUseCase(chain_repository=chain_repository),
+        download_transparency_files_use_case=DownloadTransparencyFilesUseCase(
+            downloader=CliTransparencyDownloader()
+        ),
         update_basket_item_quantity_use_case=UpdateBasketItemQuantityUseCase(
             basket_repository=basket_repository
         ),

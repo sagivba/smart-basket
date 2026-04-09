@@ -1,0 +1,62 @@
+{
+  "chain_results_input": [
+    {
+      "chain_id": 101,
+      "chain_name": "Budget Chain",
+      "basket_items": [
+        {
+          "product_id": 1,
+          "product_name": "Milk 1L",
+          "barcode": "111",
+          "quantity": 2,
+          "unit_price": 5.0
+        },
+        {
+          "product_id": 2,
+          "product_name": "Bread",
+          "barcode": "222",
+          "quantity": 1,
+          "unit_price": 7.5
+        },
+        {
+          "product_id": 3,
+          "product_name": "Eggs 12",
+          "barcode": "333",
+          "quantity": 1,
+          "unit_price": null
+        }
+      ]
+    },
+    {
+      "chain_id": 202,
+      "chain_name": "Complete Chain",
+      "basket_items": [
+        {
+          "product_id": 1,
+          "product_name": "Milk 1L",
+          "barcode": "111",
+          "quantity": 2,
+          "unit_price": 5.5
+        },
+        {
+          "product_id": 2,
+          "product_name": "Bread",
+          "barcode": "222",
+          "quantity": 1,
+          "unit_price": 7.0
+        },
+        {
+          "product_id": 3,
+          "product_name": "Eggs 12",
+          "barcode": "333",
+          "quantity": 1,
+          "unit_price": 12.0
+        }
+      ]
+    }
+  ],
+  "unmatched_items": [
+    "unknown barcode 999",
+    "mystery snack"
+  ]
+}

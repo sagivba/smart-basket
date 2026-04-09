@@ -68,7 +68,7 @@
 - [x] Implement `parse_prices_file()`
 - [ ] Implement `parse_stores_file()`
 - [x] Implement row normalization and invalid row handling *(for product/price parsing flows)*
-- [ ] Add parsing unit tests with deterministic fixtures *(partial: parsing unit tests exist but currently use inline temporary files rather than `tests/fixtures` files)*
+- [x] Add parsing unit tests with deterministic fixtures
 
 ## 12. Data loader orchestration
 - [x] Implement `LoadJob` and `LoadResult`
@@ -91,8 +91,8 @@
 - [ ] Add matching unit tests
 
 ## 15. Basket calculation
-- [ ] Implement basket item validation before calculation *(partial: line-model validation exists, but no dedicated pre-calculation basket validation flow)*
-- [ ] Implement matched product ID collection
+- [x] Implement basket item validation before calculation
+- [x] Implement matched product ID collection
 - [x] Implement line price and total chain cost calculation
 - [x] Implement found item counting
 - [x] Add calculation unit tests
@@ -152,10 +152,10 @@
 - [ ] Add scenarios for missing items and unmatched items
 
 ## 23. Fixtures and sample data
-- [ ] Create small deterministic product fixtures
+- [x] Create small deterministic product fixtures
 - [ ] Create small deterministic store fixtures
-- [ ] Create small deterministic price fixtures
-- [ ] Create parser fixtures
+- [x] Create small deterministic price fixtures
+- [x] Create parser fixtures
 - [ ] Create integration test fixtures
 
 ## 24. Documentation alignment and project hardening

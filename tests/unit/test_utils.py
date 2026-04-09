@@ -5,6 +5,12 @@ from Modules.utils.text_utils import (
     normalize_text,
     normalize_whitespace,
 )
+from Modules.utils.validators import (
+    validate_barcode,
+    validate_price,
+    validate_quantity,
+    validate_required_text,
+)
 
 
 class TestNormalizeWhitespace(unittest.TestCase):
@@ -38,6 +44,50 @@ class TestNormalizeProductName(unittest.TestCase):
 
     def test_keeps_punctuation_characters(self) -> None:
         self.assertEqual(normalize_product_name("Tomato-Paste, 500g"), "tomato-paste, 500g")
+
+
+class TestValidateBarcode(unittest.TestCase):
+    def test_valid_barcode_returns_trimmed_value(self) -> None:
+        self.assertEqual(validate_barcode(" 12345678 "), "12345678")
+
+    def test_invalid_barcode_raises_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_barcode("12ab5678")
+
+
+class TestValidateQuantity(unittest.TestCase):
+    def test_valid_quantity_returns_value(self) -> None:
+        self.assertEqual(validate_quantity(3), 3)
+
+    def test_zero_quantity_raises_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_quantity(0)
+
+    def test_negative_quantity_raises_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_quantity(-1)
+
+
+class TestValidatePrice(unittest.TestCase):
+    def test_valid_non_negative_price_returns_value(self) -> None:
+        self.assertEqual(validate_price(0.0), 0.0)
+
+    def test_negative_price_raises_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_price(-0.01)
+
+
+class TestValidateRequiredText(unittest.TestCase):
+    def test_valid_required_text_returns_trimmed_value(self) -> None:
+        self.assertEqual(validate_required_text("  Milk  ", field_name="name"), "Milk")
+
+    def test_empty_required_text_raises_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_required_text("", field_name="name")
+
+    def test_whitespace_only_required_text_raises_value_error(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_required_text("   \t", field_name="name")
 
 
 if __name__ == "__main__":

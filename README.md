@@ -118,9 +118,11 @@ python -m pip install -r requirements.txt
 
 ## Run / usage (current state)
 
-There is currently **no CLI entry point**.
+A basic CLI entry point is available via `python -m Modules.app.cli`.
 
 Current usage is module-driven (import/use in Python) and test-driven. The most reliable executable flows today are:
+
+For copy-paste CLI commands against repository fixtures, see `docs/run_examples.md`.
 
 1. Data import flow (integration-tested).
 2. Basket comparison result-building flow (integration-tested).

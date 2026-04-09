@@ -840,6 +840,7 @@ project/
 - `input_type` – barcode או name
 - `quantity`
 - `match_status`
+- `candidate_product_ids` – רשימת מזהי מוצרים אפשריים (JSON array) כאשר `match_status='ambiguous'`
 - `created_at`
 - `updated_at`
 
@@ -878,6 +879,7 @@ project/
    - אם יש התאמה אחת ברורה, הפריט ישויך למוצר.
    - אם אין התאמה, הפריט יסומן כלא מזוהה.
    - אם יש כמה התאמות, הפריט יסומן כעמום ויידרש מנגנון הכרעה בשכבת היישום.
+   - במקרה עמום אין לבחור מוצר אוטומטית: `product_id` נשאר `NULL`, `match_status='ambiguous'`, ורשימת המועמדים נשמרת ב-`candidate_product_ids`.
 
 ### 8.3 טיפול בכמויות
 לאחר התאמת המוצר, הכמות של הפריט תשמש להכפלת מחיר היחידה בכל רשת.  

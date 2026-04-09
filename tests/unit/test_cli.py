@@ -190,11 +190,12 @@ class TestCli(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertEqual(stderr.getvalue(), "")
             self.assertIn("status=ambiguous", stdout.getvalue())
+            self.assertIn("candidate_product_ids=[1, 2]", stdout.getvalue())
 
             persisted_connection = sqlite3.connect(db_path)
             persisted_row = persisted_connection.execute(
                 """
-                SELECT product_id, match_status
+                SELECT product_id, match_status, candidate_product_ids
                 FROM basket_items
                 WHERE basket_id = ?
                 ORDER BY id DESC
@@ -207,6 +208,7 @@ class TestCli(unittest.TestCase):
             self.assertIsNotNone(persisted_row)
             self.assertIsNone(persisted_row[0])
             self.assertEqual(persisted_row[1], "ambiguous")
+            self.assertEqual(persisted_row[2], "[1, 2]")
 
     def test_compare_command_prints_ranked_results_missing_and_unmatched(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

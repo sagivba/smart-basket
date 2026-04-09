@@ -102,6 +102,21 @@ class TestCoreDomainEntities(unittest.TestCase):
         self.assertEqual(basket_item.input_type, "barcode")
         self.assertEqual(basket_item.match_status, "matched")
         self.assertEqual(basket_item.quantity, 2)
+        self.assertEqual(basket_item.candidate_product_ids, [])
+
+    def test_basket_item_preserves_candidate_product_ids(self) -> None:
+        basket_item = BasketItem(
+            id=1,
+            basket_id=33,
+            product_id=None,
+            input_value="milk",
+            input_type="name",
+            quantity=1,
+            match_status="ambiguous",
+            candidate_product_ids=[10, 12],
+        )
+
+        self.assertEqual(basket_item.candidate_product_ids, [10, 12])
 
     def test_basket_item_rejects_non_positive_quantity(self) -> None:
         with self.assertRaisesRegex(ValueError, "positive integer"):

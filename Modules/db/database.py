@@ -70,6 +70,7 @@ def create_schema(connection: sqlite3.Connection) -> None:
             input_type TEXT NOT NULL,
             quantity INTEGER NOT NULL,
             match_status TEXT NOT NULL,
+            candidate_product_ids TEXT NOT NULL DEFAULT '[]',
             FOREIGN KEY (product_id) REFERENCES products(id)
         );
 
@@ -91,6 +92,18 @@ def create_schema(connection: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_basket_items_product_id
             ON basket_items(product_id);
         """
+    )
+    _ensure_basket_item_candidate_column(connection)
+
+
+def _ensure_basket_item_candidate_column(connection: sqlite3.Connection) -> None:
+    """Ensure basket_items includes candidate_product_ids for ambiguous name matches."""
+    columns = connection.execute("PRAGMA table_info(basket_items)").fetchall()
+    existing_column_names = {str(row[1]) for row in columns}
+    if "candidate_product_ids" in existing_column_names:
+        return
+    connection.execute(
+        "ALTER TABLE basket_items ADD COLUMN candidate_product_ids TEXT NOT NULL DEFAULT '[]'"
     )
 
 

@@ -118,6 +118,7 @@ class UpdateBasketItemQuantityUseCase:
             input_type=existing_item.input_type,
             quantity=validated_quantity,
             match_status=existing_item.match_status,
+            candidate_product_ids=list(existing_item.candidate_product_ids),
         )
         self.basket_repository.update_item(updated_item)
         return updated_item
@@ -169,6 +170,7 @@ class GetBasketStateUseCase:
                     "input_type": item.input_type,
                     "quantity": item.quantity,
                     "match_status": item.match_status,
+                    "candidate_product_ids": list(item.candidate_product_ids),
                 }
                 for item in basket_items
             ],

@@ -221,6 +221,7 @@ class CliMatcher:
             input_type=matched["input_type"],
             quantity=matched["quantity"],
             match_status=matched["match_status"],
+            candidate_product_ids=[],
         )
 
     def _match_name(self, *, basket_id: int, name: str, quantity: int) -> BasketItem:
@@ -257,6 +258,9 @@ class CliMatcher:
             input_type=matched["input_type"],
             quantity=matched["quantity"],
             match_status=matched["match_status"],
+            candidate_product_ids=[
+                int(candidate["id"]) for candidate in matched["candidate_products"]
+            ],
         )
 
 
@@ -397,7 +401,12 @@ def run_cli(argv: list[str] | None = None, *, stdout: TextIO | None = None, stde
             saved = app_service.add_basket_item(item)
             print(
                 f"Added basket item #{saved.id}: value='{saved.input_value}', "
-                f"status={saved.match_status}, quantity={saved.quantity}",
+                f"status={saved.match_status}, quantity={saved.quantity}"
+                + (
+                    f", candidate_product_ids={saved.candidate_product_ids}"
+                    if saved.candidate_product_ids
+                    else ""
+                ),
                 file=output,
             )
             return 0

@@ -169,7 +169,7 @@
 
 ## 25. Open MVP decisions
 - [x] Representative chain price rule — **implemented**: repository queries pick the minimum store price per chain/product (deterministic tie-break), with unit-test coverage for single-price and multi-product map behavior.
-- [ ] Ambiguous match handling policy — **partial**: engine and CLI mark ambiguous name matches without auto-selecting a product and persist `match_status="ambiguous"` with `product_id=NULL`; candidate lists exist in engine match output but are not carried through persisted basket/app-level result contracts.
+- [x] Ambiguous match handling policy — **implemented**: ambiguous name matches remain unresolved (`product_id=NULL`, `match_status="ambiguous"`), candidate product IDs are persisted in `basket_items.candidate_product_ids`, surfaced via app basket-state contracts, and printed by CLI add-item output without auto-selection.
 - [x] Basket persistence policy — **implemented**: basket items are persisted in SQLite (`basket_items` schema + repository CRUD), and application/CLI flows read and write persisted basket state by `basket_id`.
 - [x] Partial-calculation policy for unmatched items — **implemented**: unmatched inputs are excluded from chain total calculations, returned separately as `unmatched_items`, and missing-per-chain reporting stays independent.
 - [x] CLI scope in MVP — **implemented**: a basic CLI entry point (`load`, `add-item`, `compare`) is present and covered by dedicated unit/integration tests.

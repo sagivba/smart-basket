@@ -1,11 +1,11 @@
 # TODO
 
 ## 1. Repository scaffold and project docs
-- [ ] Create the base directory structure *(partial: `Modules/`, `docs/`, and `tests/` exist; `data/` is missing)*
+- [x] Create the base directory structure
 - [x] Add all package `__init__.py` files
-- [ ] Add `README.md`, `AGENTS.md`, `.env.example`, and minimal `requirements.txt` *(partial: files exist, but `README.md`, `.env.example`, and `requirements.txt` are empty)*
-- [ ] Add `docs/system_spec.md`, `docs/module_guide.md`, and `docs/test_strategy.md` *(partial: files exist, but currently empty)*
-- [ ] Add `data/raw`, `data/samples`, `data/generated`, and `tests/fixtures` *(partial: `tests/fixtures` exists; `data/` subdirectories are missing)*
+- [x] Add `README.md`, `AGENTS.md`, `.env.example`, and minimal `requirements.txt`
+- [x] Add `docs/system_spec.md`, `docs/module_guide.md`, and `docs/test_strategy.md`
+- [x] Add `data/raw`, `data/samples`, `data/generated`, and `tests/fixtures`
 
 ## 2. Core domain entities
 - [x] Implement `Product`, `Chain`, `Store`, `Price`, and `BasketItem`
@@ -13,10 +13,10 @@
 - [x] Add unit tests for entity creation and basic validation
 
 ## 3. Result models and enums
-- [ ] Implement `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
-- [ ] Implement `MatchStatus` and `AvailabilityStatus`
+- [x] Implement `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
+- [x] Implement `MatchStatus` and `AvailabilityStatus`
 - [ ] Add shared constants needed by result models
-- [ ] Add unit tests for result model behavior
+- [x] Add unit tests for result model behavior
 
 ## 4. Text utilities and validators
 - [ ] Implement text normalization helpers
@@ -145,8 +145,8 @@
 - [ ] Ensure all new behavior is covered with `unittest` only
 
 ## 22. Integration tests
-- [ ] Implement `test_import_flow.py` *(missing: `tests/integration/` not present)*
-- [ ] Implement `test_basket_comparison.py` *(missing: `tests/integration/` not present)*
+- [ ] Implement `test_import_flow.py` *(partial: scaffold file now exists with placeholder only)*
+- [ ] Implement `test_basket_comparison.py` *(partial: scaffold file now exists with placeholder only)*
 - [ ] Add an end-to-end file-to-database loading scenario
 - [ ] Add an end-to-end basket comparison scenario
 - [ ] Add scenarios for missing items and unmatched items
@@ -156,7 +156,7 @@
 - [ ] Create small deterministic store fixtures
 - [ ] Create small deterministic price fixtures
 - [ ] Create parser fixtures
-- [ ] Create integration test fixtures *(blocked: `tests/integration/` not present)*
+- [ ] Create integration test fixtures
 
 ## 24. Documentation alignment and project hardening
 - [ ] Update `README.md` with installation, run, and test instructions

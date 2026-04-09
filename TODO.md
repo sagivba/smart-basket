@@ -164,7 +164,7 @@
 - [x] Update `test_strategy.md` with testing patterns and execution guidance
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
 - [x] Document Python 3.12 compatibility expectation and verification trail *(README + test-strategy now document CI target, local test command, and evidence boundaries without over-claiming runtime guarantees)*
-- [ ] Verify the system runs fully offline
+- [ ] Verify the system runs fully offline *(partial: runtime code/tests are local-only and `requirements.txt` is empty, but CI/bootstrap flow still includes a generic `pip install` step; see `docs/system_spec.md` audit status section.)*
 - [ ] Verify responsibilities remain cleanly separated across layers
 
 ## 25. Open MVP decisions

@@ -8,9 +8,9 @@
 - [x] Add `data/raw`, `data/samples`, `data/generated`, and `tests/fixtures`
 
 ## 2. Core domain entities
-- [ ] Implement `Product`, `Chain`, `Store`, `Price`, and `BasketItem`
-- [ ] Keep domain models independent from DB and business logic
-- [ ] Add unit tests for entity creation and basic validation
+- [x] Implement `Product`, `Chain`, `Store`, `Price`, and `BasketItem`
+- [x] Keep domain models independent from DB and business logic
+- [x] Add unit tests for entity creation and basic validation
 
 ## 3. Result models and enums
 - [x] Implement `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`

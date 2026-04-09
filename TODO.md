@@ -15,7 +15,7 @@
 ## 3. Result models and enums
 - [x] Implement `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
 - [x] Implement `MatchStatus` and `AvailabilityStatus`
-- [ ] Add shared constants needed by result models
+- [x] Add shared constants needed by result models
 - [x] Add unit tests for result model behavior
 
 ## 4. Text utilities and validators
@@ -31,24 +31,24 @@
 - [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
-- [ ] Implement product upsert
-- [ ] Implement lookup by barcode
-- [ ] Implement lookup by normalized name
-- [ ] Implement retrieval by product IDs
-- [ ] Add repository unit tests *(partial: repository tests currently cover `BasketRepository` only)*
+- [x] Implement product upsert
+- [x] Implement lookup by barcode
+- [x] Implement lookup by normalized name
+- [x] Implement retrieval by product IDs
+- [x] Add repository unit tests
 
 ## 7. ChainRepository and StoreRepository
-- [ ] Implement chain upsert and lookup operations
-- [ ] Implement store upsert and lookup operations
-- [ ] Implement retrieval of stores by chain
-- [ ] Add repository unit tests *(partial: repository tests currently cover `BasketRepository` only)*
+- [x] Implement chain upsert and lookup operations
+- [x] Implement store upsert and lookup operations
+- [x] Implement retrieval of stores by chain
+- [x] Add repository unit tests
 
 ## 8. PriceRepository
-- [ ] Implement price upsert
-- [ ] Implement price retrieval by product and chain
-- [ ] Implement `get_prices_for_products_by_chain()`
-- [ ] Implement the MVP representative price rule for a chain
-- [ ] Add repository unit tests *(partial: repository tests currently cover `BasketRepository` only)*
+- [x] Implement price upsert
+- [x] Implement price retrieval by product and chain
+- [x] Implement `get_prices_for_products_by_chain()`
+- [x] Implement the MVP representative price rule for a chain
+- [x] Add repository unit tests
 
 ## 9. BasketRepository
 - [x] Implement basket item persistence
@@ -84,11 +84,11 @@
 - [ ] Add matching unit tests
 
 ## 14. Name-based product matching
-- [ ] Implement normalized-name product matching
-- [ ] Return a single match for unambiguous results
-- [ ] Return candidate lists for ambiguous matches
-- [ ] Mark unknown names as unmatched
-- [ ] Add matching unit tests
+- [x] Implement normalized-name product matching
+- [x] Return a single match for unambiguous results
+- [x] Return candidate lists for ambiguous matches
+- [x] Mark unknown names as unmatched
+- [x] Add matching unit tests
 
 ## 15. Basket calculation
 - [x] Implement basket item validation before calculation
@@ -106,11 +106,11 @@
 - [x] Add unit tests
 
 ## 17. Chain ranking and comparison service
-- [ ] Implement `BasketCalculator` integration into comparison flow
-- [ ] Implement `BasketComparisonService`
-- [ ] Implement `compare_basket()`
-- [ ] Implement `rank_chains()` with complete baskets ranked before partial baskets
-- [ ] Add unit tests for ranking and comparison behavior
+- [x] Implement `BasketCalculator` integration into comparison flow
+- [x] Implement `BasketComparisonService`
+- [x] Implement `compare_basket()`
+- [x] Implement `rank_chains()` with complete baskets ranked before partial baskets
+- [x] Add unit tests for ranking and comparison behavior
 
 ## 18. Application service and use cases
 - [x] Implement `ApplicationService`
@@ -122,18 +122,18 @@
 
 ## 19. Basket management at application level
 - [x] Implement basket item addition
-- [ ] Implement basket item quantity update
-- [ ] Implement basket item removal
-- [ ] Implement basket clearing
-- [ ] Implement current basket state retrieval
-- [ ] Add unit tests
+- [x] Implement basket item quantity update
+- [x] Implement basket item removal
+- [x] Implement basket clearing
+- [x] Implement current basket state retrieval
+- [x] Add unit tests
 
 ## 20. Basic CLI
-- [ ] Create a basic CLI entry point
-- [ ] Add commands for data loading, basket item addition, and basket comparison
-- [ ] Implement text output for comparison results, missing items, and unmatched items
-- [ ] Implement user-friendly error messages
-- [ ] Add CLI-level tests if applicable
+- [x] Create a basic CLI entry point
+- [x] Add commands for data loading, basket item addition, and basket comparison
+- [x] Implement text output for comparison results, missing items, and unmatched items
+- [x] Implement user-friendly error messages
+- [x] Add CLI-level tests if applicable
 
 ## 21. Unit tests by module
 - [x] Complete `test_models.py`
@@ -153,19 +153,19 @@
 
 ## 23. Fixtures and sample data
 - [x] Create small deterministic product fixtures
-- [ ] Create small deterministic store fixtures
+- [x] Create small deterministic store fixtures
 - [x] Create small deterministic price fixtures
 - [x] Create parser fixtures
 - [x] Create integration test fixtures
 
 ## 24. Documentation alignment and project hardening
-- [ ] Update `README.md` with installation, run, and test instructions
+- [x] Update `README.md` with installation, run, and test instructions
 - [ ] Update `module_guide.md` with layer boundaries and dependencies
 - [x] Update `test_strategy.md` with testing patterns and execution guidance
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
 - [x] Document Python 3.12 compatibility expectation and verification trail *(README + test-strategy now document CI target, local test command, and evidence boundaries without over-claiming runtime guarantees)*
 - [ ] Verify the system runs fully offline
-- [ ] Verify responsibilities remain cleanly separated across layers
+- [ ] Verify responsibilities remain cleanly separated across layers *(partial: audited in `docs/module_guide.md`; data loader still performs direct SQL persistence instead of delegating fully to DB repositories)*
 
 ## 25. Open MVP decisions
 - [ ] Finalize the representative chain price rule

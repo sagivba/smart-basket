@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import unittest
 
-from Modules.engine.basket_engine import BasketEngine
+from Modules.engine.basket_engine import BasketCalculator, BasketComparisonService, BasketEngine
+from Modules.models.entities import BasketItem
 from Modules.models.results import (
     AvailabilityStatus,
     BasketComparisonResult,
     BasketLineResult,
     ChainComparisonResult,
+    MatchStatus,
 )
 
 

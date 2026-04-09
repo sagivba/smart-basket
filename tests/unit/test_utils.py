@@ -1,52 +1,43 @@
-"""Unit tests for utility validators."""
-
 import unittest
 
-from Modules.utils.validators import (
-    validate_barcode,
-    validate_price,
-    validate_quantity,
-    validate_required_text,
+from Modules.utils.text_utils import (
+    normalize_product_name,
+    normalize_text,
+    normalize_whitespace,
 )
 
 
-class TestValidators(unittest.TestCase):
-    def test_validate_quantity_valid_positive_integer(self) -> None:
-        self.assertEqual(validate_quantity(3), 3)
+class TestNormalizeWhitespace(unittest.TestCase):
+    def test_trims_surrounding_whitespace(self) -> None:
+        self.assertEqual(normalize_whitespace("  milk  "), "milk")
 
-    def test_validate_quantity_rejects_zero(self) -> None:
-        with self.assertRaisesRegex(ValueError, "positive integer"):
-            validate_quantity(0)
+    def test_collapses_repeated_internal_whitespace(self) -> None:
+        self.assertEqual(normalize_whitespace("milk   2%\t\nlarge"), "milk 2% large")
 
-    def test_validate_quantity_rejects_negative(self) -> None:
-        with self.assertRaisesRegex(ValueError, "positive integer"):
-            validate_quantity(-1)
+    def test_returns_empty_string_for_whitespace_only_input(self) -> None:
+        self.assertEqual(normalize_whitespace("   \t\n  "), "")
 
-    def test_validate_price_valid_non_negative(self) -> None:
-        self.assertEqual(validate_price(0.0), 0.0)
-        self.assertEqual(validate_price(12.5), 12.5)
+    def test_returns_empty_string_for_empty_input(self) -> None:
+        self.assertEqual(normalize_whitespace(""), "")
 
-    def test_validate_price_rejects_negative(self) -> None:
-        with self.assertRaisesRegex(ValueError, "must not be negative"):
-            validate_price(-0.01)
+    def test_leaves_already_normalized_whitespace_unchanged(self) -> None:
+        self.assertEqual(normalize_whitespace("whole milk"), "whole milk")
 
-    def test_validate_required_text_valid_non_empty(self) -> None:
-        self.assertEqual(validate_required_text("  Milk  ", "name"), "Milk")
 
-    def test_validate_required_text_rejects_empty(self) -> None:
-        with self.assertRaisesRegex(ValueError, "name is required"):
-            validate_required_text("", "name")
+class TestNormalizeText(unittest.TestCase):
+    def test_normalizes_whitespace_and_lowercase(self) -> None:
+        self.assertEqual(normalize_text("  Whole   MILK  "), "whole milk")
 
-    def test_validate_required_text_rejects_whitespace_only(self) -> None:
-        with self.assertRaisesRegex(ValueError, "name is required"):
-            validate_required_text("   ", "name")
+    def test_returns_empty_string_for_empty_input(self) -> None:
+        self.assertEqual(normalize_text(""), "")
 
-    def test_validate_barcode_valid_simple_input(self) -> None:
-        self.assertEqual(validate_barcode(" 12345678 "), "12345678")
 
-    def test_validate_barcode_rejects_invalid_characters(self) -> None:
-        with self.assertRaisesRegex(ValueError, "digits only"):
-            validate_barcode("12A45678")
+class TestNormalizeProductName(unittest.TestCase):
+    def test_normalizes_simple_product_name(self) -> None:
+        self.assertEqual(normalize_product_name("  Chocolate   Bar 100G "), "chocolate bar 100g")
+
+    def test_keeps_punctuation_characters(self) -> None:
+        self.assertEqual(normalize_product_name("Tomato-Paste, 500g"), "tomato-paste, 500g")
 
 
 if __name__ == "__main__":

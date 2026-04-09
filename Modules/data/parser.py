@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import csv
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import Any
+
+from Modules.utils.text_utils import normalize_product_name, normalize_whitespace
+from Modules.utils.validators import validate_barcode, validate_required_text
 
 
 class FileFormat(str, Enum):
@@ -16,6 +22,10 @@ class FileFormat(str, Enum):
 
 class UnsupportedFileFormatError(ValueError):
     """Raised when parsing is requested for an unsupported file format."""
+
+
+class MalformedFileContentError(ValueError):
+    """Raised when file content cannot be parsed as valid structured rows."""
 
 
 @dataclass(slots=True)
@@ -135,3 +145,231 @@ class FileParser:
     def create_error_collection() -> ParsingErrorCollection:
         """Create an empty structured parsing error collection."""
         return ParsingErrorCollection()
+
+
+@dataclass(slots=True)
+class _RowValidationError(ValueError):
+    """Internal row-level validation error with structured metadata."""
+
+    field_name: str
+    message: str
+    raw_value: str | None = None
+
+
+def _normalize_row(raw_row: dict[str, Any]) -> dict[str, Any]:
+    """Normalize row keys for deterministic field lookup."""
+    return {normalize_whitespace(str(key)).lower(): value for key, value in raw_row.items()}
+
+
+def _read_rows(file_path: str | Path) -> tuple[FileFormat, list[tuple[int, dict[str, Any]]]]:
+    """Read a supported file into a deterministic sequence of row dictionaries."""
+    format_type = FileParser.detect_format(file_path)
+    path = Path(file_path)
+
+    if format_type == FileFormat.CSV:
+        try:
+            with path.open("r", encoding="utf-8", newline="") as csv_file:
+                reader = csv.DictReader(csv_file)
+                if reader.fieldnames is None:
+                    raise MalformedFileContentError("CSV file must include a header row")
+                return format_type, [
+                    (index, dict(row))
+                    for index, row in enumerate(reader, start=2)
+                ]
+        except csv.Error as exc:
+            raise MalformedFileContentError("malformed CSV content") from exc
+
+    try:
+        with path.open("r", encoding="utf-8") as json_file:
+            payload = json.load(json_file)
+    except json.JSONDecodeError as exc:
+        raise MalformedFileContentError("malformed JSON content") from exc
+
+    if not isinstance(payload, list):
+        raise MalformedFileContentError("JSON content must be a list of row objects")
+
+    rows: list[tuple[int, dict[str, Any]]] = []
+    for index, row in enumerate(payload, start=1):
+        if not isinstance(row, dict):
+            raise MalformedFileContentError("JSON rows must be objects")
+        rows.append((index, row))
+
+    return format_type, rows
+
+
+def _get_required_field(
+    row: dict[str, Any],
+    aliases: tuple[str, ...],
+    *,
+    target_field: str,
+    row_number: int,
+) -> str:
+    """Get a normalized required field value from one input row."""
+    for alias in aliases:
+        if alias in row:
+            raw_value = row.get(alias)
+            if raw_value is None:
+                break
+            try:
+                validated = validate_required_text(str(raw_value), target_field)
+                return normalize_whitespace(validated)
+            except (TypeError, ValueError) as exc:
+                raise _RowValidationError(target_field, str(exc), str(raw_value)) from exc
+
+    raise _RowValidationError(target_field, f"{target_field} is required")
+
+
+def _get_optional_field(row: dict[str, Any], aliases: tuple[str, ...]) -> str | None:
+    """Get an optional field and normalize empty values to None."""
+    for alias in aliases:
+        if alias in row:
+            raw_value = row.get(alias)
+            if raw_value is None:
+                return None
+            normalized = normalize_whitespace(str(raw_value))
+            return normalized or None
+    return None
+
+
+def _build_product_record(row_number: int, raw_row: dict[str, Any]) -> ParsedProductRecord:
+    """Build one validated ParsedProductRecord from an input row."""
+    row = _normalize_row(raw_row)
+
+    barcode_text = _get_required_field(
+        row,
+        ("barcode", "product_barcode"),
+        target_field="barcode",
+        row_number=row_number,
+    )
+    try:
+        barcode = validate_barcode(barcode_text)
+    except (TypeError, ValueError) as exc:
+        raise _RowValidationError("barcode", str(exc), barcode_text) from exc
+
+    product_name = _get_required_field(
+        row,
+        ("product_name", "name", "product"),
+        target_field="product_name",
+        row_number=row_number,
+    )
+    normalized_name = normalize_product_name(product_name)
+
+    return ParsedProductRecord(
+        source_row_number=row_number,
+        barcode=barcode,
+        product_name=product_name,
+        normalized_name=normalized_name,
+        brand=_get_optional_field(row, ("brand",)),
+        unit_name=_get_optional_field(row, ("unit_name", "unit")),
+    )
+
+
+def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPriceRecord:
+    """Build one validated ParsedPriceRecord from an input row."""
+    row = _normalize_row(raw_row)
+
+    chain_code = _get_required_field(
+        row,
+        ("chain_code", "chain"),
+        target_field="chain_code",
+        row_number=row_number,
+    )
+    store_code = _get_required_field(
+        row,
+        ("store_code", "store"),
+        target_field="store_code",
+        row_number=row_number,
+    )
+    barcode_text = _get_required_field(
+        row,
+        ("barcode", "product_barcode"),
+        target_field="barcode",
+        row_number=row_number,
+    )
+    try:
+        barcode = validate_barcode(barcode_text)
+    except (TypeError, ValueError) as exc:
+        raise _RowValidationError("barcode", str(exc), barcode_text) from exc
+
+    price_text = _get_required_field(
+        row,
+        ("price", "price_text"),
+        target_field="price",
+        row_number=row_number,
+    )
+    currency = _get_required_field(
+        row,
+        ("currency",),
+        target_field="currency",
+        row_number=row_number,
+    )
+    price_date_text = _get_required_field(
+        row,
+        ("price_date", "price_date_text", "date"),
+        target_field="price_date",
+        row_number=row_number,
+    )
+
+    return ParsedPriceRecord(
+        source_row_number=row_number,
+        chain_code=chain_code,
+        store_code=store_code,
+        barcode=barcode,
+        price_text=price_text,
+        currency=currency,
+        price_date_text=price_date_text,
+    )
+
+
+def parse_products_file(
+    file_path: str | Path,
+) -> tuple[list[ParsedProductRecord], ParsingSummary, ParsingErrorCollection]:
+    """Parse an MVP product file and return parsed records with structured outcomes."""
+    summary = FileParser.create_summary(file_path)
+    errors = FileParser.create_error_collection()
+    _, rows = _read_rows(file_path)
+
+    records: list[ParsedProductRecord] = []
+    for row_number, row in rows:
+        try:
+            records.append(_build_product_record(row_number, row))
+            summary.accepted_rows += 1
+        except _RowValidationError as exc:
+            summary.rejected_rows += 1
+            errors.add(
+                ParsingError(
+                    row_number=row_number,
+                    field_name=exc.field_name,
+                    message=exc.message,
+                    raw_value=exc.raw_value,
+                )
+            )
+
+    return records, summary, errors
+
+
+def parse_prices_file(
+    file_path: str | Path,
+) -> tuple[list[ParsedPriceRecord], ParsingSummary, ParsingErrorCollection]:
+    """Parse an MVP price file and return parsed records with structured outcomes."""
+    summary = FileParser.create_summary(file_path)
+    errors = FileParser.create_error_collection()
+    _, rows = _read_rows(file_path)
+
+    records: list[ParsedPriceRecord] = []
+    for row_number, row in rows:
+        try:
+            records.append(_build_price_record(row_number, row))
+            summary.accepted_rows += 1
+        except _RowValidationError as exc:
+            summary.rejected_rows += 1
+            errors.add(
+                ParsingError(
+                    row_number=row_number,
+                    field_name=exc.field_name,
+                    message=exc.message,
+                    raw_value=exc.raw_value,
+                )
+            )
+
+    return records, summary, errors

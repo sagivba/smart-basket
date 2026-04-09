@@ -21,8 +21,8 @@
 ## 4. Text utilities and validators
 - [x] Implement text normalization helpers
 - [x] Implement product name normalization helpers
-- [ ] Implement barcode, quantity, price, and required-field validation
-- [ ] Add unit tests for utilities and validators
+- [x] Implement barcode, quantity, price, and required-field validation
+- [ ] Add unit tests for utilities and validators *(partial: text utility tests exist; validator tests are still missing)*
 
 ## 5. SQLite connection manager and schema creation
 - [x] Implement `ConnectionFactory` and `DatabaseManager`
@@ -137,9 +137,9 @@
 
 ## 21. Unit tests by module
 - [x] Complete `test_models.py`
-- [x] Complete `test_utils.py` *(text utility coverage added)*
-- [x] Complete `test_db.py` *(BasketRepository coverage added)*
-- [x] Complete `test_data.py` *(parser infrastructure coverage added)*
+- [ ] Complete `test_utils.py` *(partial: text utility coverage added; validator coverage is still missing)*
+- [ ] Complete `test_db.py` *(partial: file exists, currently empty)*
+- [ ] Complete `test_data.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_app.py` *(partial: file exists, currently empty)*
 - [ ] Ensure all new behavior is covered with `unittest` only

@@ -25,10 +25,10 @@
 - [ ] Add unit tests for utilities and validators
 
 ## 5. SQLite connection manager and schema creation
-- [ ] Implement `ConnectionFactory` and `DatabaseManager`
-- [ ] Implement schema creation for `products`, `chains`, `stores`, `prices`, and `basket_items`
-- [ ] Create required foreign keys and indexes
-- [ ] Add unit tests for schema creation and DB initialization
+- [x] Implement `ConnectionFactory` and `DatabaseManager`
+- [x] Implement schema creation for `products`, `chains`, `stores`, `prices`, and `basket_items`
+- [x] Create required foreign keys and indexes
+- [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
 - [ ] Implement product upsert

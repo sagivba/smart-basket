@@ -31,16 +31,16 @@
 - [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
-- [x] Implement product upsert
-- [x] Implement lookup by barcode
-- [x] Implement lookup by normalized name
-- [x] Implement retrieval by product IDs
+- [ ] Implement product upsert
+- [ ] Implement lookup by barcode
+- [ ] Implement lookup by normalized name
+- [ ] Implement retrieval by product IDs
 - [x] Add repository unit tests
 
 ## 7. ChainRepository and StoreRepository
-- [x] Implement chain upsert and lookup operations
-- [x] Implement store upsert and lookup operations
-- [x] Implement retrieval of stores by chain
+- [ ] Implement chain upsert and lookup operations
+- [ ] Implement store upsert and lookup operations
+- [ ] Implement retrieval of stores by chain
 - [x] Add repository unit tests
 
 ## 8. PriceRepository
@@ -48,13 +48,13 @@
 - [ ] Implement price retrieval by product and chain
 - [ ] Implement `get_prices_for_products_by_chain()`
 - [ ] Implement the MVP representative price rule for a chain
-- [ ] Add repository unit tests
+- [x] Add repository unit tests
 
 ## 9. BasketRepository
-- [ ] Implement basket item persistence
-- [ ] Implement basket retrieval by basket ID
-- [ ] Implement basket item update and deletion
-- [ ] Add repository unit tests
+- [x] Implement basket item persistence
+- [x] Implement basket retrieval by basket ID
+- [x] Implement basket item update and deletion
+- [x] Add repository unit tests
 
 ## 10. Parser core infrastructure
 - [ ] Implement parsing models such as `ParsedProductRecord` and `ParsedPriceRecord`
@@ -138,7 +138,7 @@
 ## 21. Unit tests by module
 - [x] Complete `test_models.py`
 - [x] Complete `test_utils.py` *(text utility coverage added)*
-- [x] Complete `test_db.py` *(chain/store repository coverage added)*
+- [x] Complete `test_db.py` *(BasketRepository coverage added)*
 - [ ] Complete `test_data.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_app.py` *(partial: file exists, currently empty)*

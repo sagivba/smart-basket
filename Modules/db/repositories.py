@@ -1,162 +1,107 @@
-"""Repository implementations for database persistence operations."""
+"""SQLite repository implementations for MVP persistence operations."""
 
 from __future__ import annotations
 
 import sqlite3
-from typing import Optional
 
-from Modules.models.entities import Chain, Store
-
-
-class ChainRepository:
-    """Persistence operations for ``Chain`` entities."""
-
-    def __init__(self, connection: sqlite3.Connection) -> None:
-        self._connection = connection
-
-    def upsert_chain(self, chain: Chain) -> Chain:
-        """Insert or update a chain using ``chain_code`` as the uniqueness rule."""
-        existing = self.get_by_chain_code(chain.chain_code)
-
-        if existing is None:
-            cursor = self._connection.execute(
-                """
-                INSERT INTO chains (chain_code, name)
-                VALUES (?, ?)
-                """,
-                (chain.chain_code, chain.name),
-            )
-            self._connection.commit()
-            return Chain(id=int(cursor.lastrowid), chain_code=chain.chain_code, name=chain.name)
-
-        self._connection.execute(
-            """
-            UPDATE chains
-            SET name = ?
-            WHERE id = ?
-            """,
-            (chain.name, existing.id),
-        )
-        self._connection.commit()
-        return Chain(id=existing.id, chain_code=chain.chain_code, name=chain.name)
-
-    def get_by_chain_code(self, chain_code: str) -> Optional[Chain]:
-        """Return a chain by chain code, or ``None`` when not found."""
-        row = self._connection.execute(
-            """
-            SELECT id, chain_code, name
-            FROM chains
-            WHERE chain_code = ?
-            """,
-            (chain_code,),
-        ).fetchone()
-
-        if row is None:
-            return None
-
-        return Chain(id=row[0], chain_code=row[1], name=row[2])
+from Modules.models.entities import BasketItem
 
 
-class StoreRepository:
-    """Persistence operations for ``Store`` entities."""
+class BasketRepository:
+    """Persistence operations for basket items."""
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
 
-    def upsert_store(self, store: Store) -> Store:
-        """Insert or update a store using ``(chain_id, store_code)`` as uniqueness rule."""
-        existing = self.get_by_chain_and_store_code(store.chain_id, store.store_code)
-
-        if existing is None:
-            cursor = self._connection.execute(
-                """
-                INSERT INTO stores (chain_id, store_code, name, city, address, is_active)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    store.chain_id,
-                    store.store_code,
-                    store.name,
-                    store.city,
-                    store.address,
-                    int(store.is_active),
-                ),
-            )
-            self._connection.commit()
-            return Store(
-                id=int(cursor.lastrowid),
-                chain_id=store.chain_id,
-                store_code=store.store_code,
-                name=store.name,
-                city=store.city,
-                address=store.address,
-                is_active=store.is_active,
-            )
-
-        self._connection.execute(
+    def add_item(self, item: BasketItem) -> BasketItem:
+        """Insert a basket item and return it with the generated identifier."""
+        cursor = self._connection.execute(
             """
-            UPDATE stores
-            SET name = ?, city = ?, address = ?, is_active = ?
-            WHERE id = ?
+            INSERT INTO basket_items (
+                basket_id,
+                product_id,
+                input_value,
+                input_type,
+                quantity,
+                match_status
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                store.name,
-                store.city,
-                store.address,
-                int(store.is_active),
-                existing.id,
+                item.basket_id,
+                item.product_id,
+                item.input_value,
+                item.input_type,
+                item.quantity,
+                item.match_status,
             ),
         )
         self._connection.commit()
-        return Store(
-            id=existing.id,
-            chain_id=store.chain_id,
-            store_code=store.store_code,
-            name=store.name,
-            city=store.city,
-            address=store.address,
-            is_active=store.is_active,
+
+        return BasketItem(
+            id=int(cursor.lastrowid),
+            basket_id=item.basket_id,
+            product_id=item.product_id,
+            input_value=item.input_value,
+            input_type=item.input_type,
+            quantity=item.quantity,
+            match_status=item.match_status,
         )
 
-    def get_by_chain_and_store_code(self, chain_id: int, store_code: str) -> Optional[Store]:
-        """Return a store for a specific chain/store code pair, or ``None``."""
-        row = self._connection.execute(
-            """
-            SELECT id, chain_id, store_code, name, city, address, is_active
-            FROM stores
-            WHERE chain_id = ? AND store_code = ?
-            """,
-            (chain_id, store_code),
-        ).fetchone()
-
-        if row is None:
-            return None
-
-        return self._map_store_row(row)
-
-    def get_by_chain(self, chain_id: int) -> list[Store]:
-        """Return all stores for a chain ordered by ID."""
+    def get_by_basket_id(self, basket_id: int) -> list[BasketItem]:
+        """Return all items that belong to the requested basket identifier."""
         rows = self._connection.execute(
             """
-            SELECT id, chain_id, store_code, name, city, address, is_active
-            FROM stores
-            WHERE chain_id = ?
-            ORDER BY id ASC
+            SELECT id, basket_id, product_id, input_value, input_type, quantity, match_status
+            FROM basket_items
+            WHERE basket_id = ?
+            ORDER BY id
             """,
-            (chain_id,),
-        ).fetchall()
+            (basket_id,),
+        )
+        return [self._row_to_item(row) for row in rows.fetchall()]
 
-        return [self._map_store_row(row) for row in rows]
+    def update_item(self, item: BasketItem) -> None:
+        """Update an existing basket item by identifier."""
+        if item.id is None:
+            raise ValueError("item.id is required for update")
+
+        self._connection.execute(
+            """
+            UPDATE basket_items
+            SET basket_id = ?,
+                product_id = ?,
+                input_value = ?,
+                input_type = ?,
+                quantity = ?,
+                match_status = ?
+            WHERE id = ?
+            """,
+            (
+                item.basket_id,
+                item.product_id,
+                item.input_value,
+                item.input_type,
+                item.quantity,
+                item.match_status,
+                item.id,
+            ),
+        )
+        self._connection.commit()
+
+    def delete_item(self, item_id: int) -> None:
+        """Delete a single basket item by identifier."""
+        self._connection.execute("DELETE FROM basket_items WHERE id = ?", (item_id,))
+        self._connection.commit()
 
     @staticmethod
-    def _map_store_row(row: sqlite3.Row | tuple) -> Store:
-        """Map a raw stores table row to a ``Store`` entity."""
-        return Store(
+    def _row_to_item(row: sqlite3.Row | tuple[object, ...]) -> BasketItem:
+        """Map a row from basket_items to a BasketItem entity."""
+        return BasketItem(
             id=row[0],
-            chain_id=row[1],
-            store_code=row[2],
-            name=row[3],
-            city=row[4],
-            address=row[5],
-            is_active=bool(row[6]),
+            basket_id=row[1],
+            product_id=row[2],
+            input_value=row[3],
+            input_type=row[4],
+            quantity=row[5],
+            match_status=row[6],
         )

@@ -11,6 +11,7 @@ from Modules.models.results import (
     BasketComparisonResult,
     BasketLineResult,
     ChainComparisonResult,
+    MatchStatus,
 )
 
 

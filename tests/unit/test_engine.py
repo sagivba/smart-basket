@@ -10,6 +10,7 @@ from Modules.models.results import (
     BasketComparisonResult,
     BasketLineResult,
     ChainComparisonResult,
+    MatchStatus,
 )
 
 
@@ -316,6 +317,96 @@ class TestBasketEngineResultBuilding(unittest.TestCase):
                 chain_name="Chain X",
                 basket_items=[{"quantity": 1, "unit_price": 5.0}],
             )
+
+
+class TestBasketEngineNameMatching(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = BasketEngine()
+
+    def test_match_input_item_by_name_returns_single_match_for_unambiguous_hit(self) -> None:
+        result = self.engine.match_input_item_by_name(
+            name="  MILK 1L  ",
+            quantity=2,
+            products_by_normalized_name={
+                "milk 1l": [{"id": 10, "name": "Milk 1L", "barcode": "111"}]
+            },
+        )
+
+        self.assertEqual(result["input_type"], "name")
+        self.assertEqual(result["input_value"], "milk 1l")
+        self.assertEqual(result["quantity"], 2)
+        self.assertEqual(result["match_status"], MatchStatus.MATCHED.value)
+        self.assertEqual(result["product_id"], 10)
+        self.assertEqual(result["product_name"], "Milk 1L")
+        self.assertEqual(result["barcode"], "111")
+        self.assertEqual(result["candidate_products"], [])
+
+    def test_match_input_item_by_name_returns_ambiguous_with_candidates(self) -> None:
+        result = self.engine.match_input_item_by_name(
+            name="cola",
+            quantity=1,
+            products_by_normalized_name={
+                "cola": [
+                    {"id": 1, "name": "Cola 330ml", "barcode": "100"},
+                    {"id": 2, "name": "Cola Zero 330ml", "barcode": "200"},
+                ]
+            },
+        )
+
+        self.assertEqual(result["match_status"], MatchStatus.AMBIGUOUS.value)
+        self.assertIsNone(result["product_id"])
+        self.assertIsNone(result["product_name"])
+        self.assertIsNone(result["barcode"])
+        self.assertEqual(
+            result["candidate_products"],
+            [
+                {"id": 1, "name": "Cola 330ml", "barcode": "100"},
+                {"id": 2, "name": "Cola Zero 330ml", "barcode": "200"},
+            ],
+        )
+
+    def test_match_input_item_by_name_returns_unmatched_for_unknown_name(self) -> None:
+        result = self.engine.match_input_item_by_name(
+            name="unknown product",
+            quantity=1,
+            products_by_normalized_name={},
+        )
+
+        self.assertEqual(result["match_status"], MatchStatus.UNMATCHED.value)
+        self.assertIsNone(result["product_id"])
+        self.assertIsNone(result["product_name"])
+        self.assertIsNone(result["barcode"])
+        self.assertEqual(result["candidate_products"], [])
+
+    def test_match_basket_items_by_name_collects_only_unmatched_inputs(self) -> None:
+        result = self.engine.match_basket_items_by_name(
+            basket_items=[
+                {"input_value": "Milk 1L", "quantity": 1},
+                {"input_value": "Cola", "quantity": 1},
+                {"input_value": "Unknown", "quantity": 1},
+            ],
+            products=[
+                {"id": 10, "name": "Milk 1L", "barcode": "111", "normalized_name": "milk 1l"},
+                {"id": 20, "name": "Cola 330ml", "barcode": "222", "normalized_name": "cola"},
+                {
+                    "id": 21,
+                    "name": "Cola Zero 330ml",
+                    "barcode": "223",
+                    "normalized_name": "cola",
+                },
+            ],
+        )
+
+        self.assertEqual(len(result["matched_items"]), 3)
+        self.assertEqual(
+            [item["match_status"] for item in result["matched_items"]],
+            [
+                MatchStatus.MATCHED.value,
+                MatchStatus.AMBIGUOUS.value,
+                MatchStatus.UNMATCHED.value,
+            ],
+        )
+        self.assertEqual(result["unmatched_items"], ["unknown"])
 
 
 if __name__ == "__main__":

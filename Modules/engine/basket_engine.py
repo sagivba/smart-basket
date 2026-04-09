@@ -6,6 +6,7 @@ from collections.abc import Mapping, Sequence
 from numbers import Real
 from typing import Any
 
+from Modules.utils.text_utils import normalize_product_name
 from Modules.models.results import (
     AvailabilityStatus,
     BasketComparisonResult,
@@ -82,6 +83,95 @@ class BasketEngine:
             "unmatched_items": unmatched_items,
         }
 
+    def match_input_item_by_name(
+        self,
+        *,
+        name: str,
+        quantity: int,
+        products_by_normalized_name: Mapping[str, Sequence[Mapping[str, Any]]],
+    ) -> dict[str, Any]:
+        """Match one name input item and return a stable match structure."""
+        normalized_name = self._normalize_name(name)
+        normalized_quantity = self._validate_quantity(quantity)
+        matched_products = list(products_by_normalized_name.get(normalized_name, []))
+
+        if not matched_products:
+            return {
+                "input_type": "name",
+                "input_value": normalized_name,
+                "quantity": normalized_quantity,
+                "match_status": MatchStatus.UNMATCHED.value,
+                "product_id": None,
+                "product_name": None,
+                "barcode": None,
+                "candidate_products": [],
+            }
+
+        if len(matched_products) > 1:
+            return {
+                "input_type": "name",
+                "input_value": normalized_name,
+                "quantity": normalized_quantity,
+                "match_status": MatchStatus.AMBIGUOUS.value,
+                "product_id": None,
+                "product_name": None,
+                "barcode": None,
+                "candidate_products": [
+                    {
+                        "id": product.get("id"),
+                        "name": product.get("name"),
+                        "barcode": product.get("barcode"),
+                    }
+                    for product in matched_products
+                ],
+            }
+
+        matched_product = matched_products[0]
+        return {
+            "input_type": "name",
+            "input_value": normalized_name,
+            "quantity": normalized_quantity,
+            "match_status": MatchStatus.MATCHED.value,
+            "product_id": matched_product.get("id"),
+            "product_name": matched_product.get("name"),
+            "barcode": matched_product.get("barcode"),
+            "candidate_products": [],
+        }
+
+    def match_basket_items_by_name(
+        self,
+        *,
+        basket_items: Sequence[Mapping[str, Any]],
+        products: Sequence[Mapping[str, Any]],
+    ) -> dict[str, list[Any]]:
+        """Match basket inputs by normalized product name."""
+        products_by_normalized_name: dict[str, list[Mapping[str, Any]]] = {}
+        for product in products:
+            normalized_name = product.get("normalized_name")
+            if normalized_name is None:
+                continue
+
+            key = normalize_product_name(str(normalized_name))
+            products_by_normalized_name.setdefault(key, []).append(product)
+
+        matched_items: list[dict[str, Any]] = []
+        unmatched_items: list[str] = []
+
+        for basket_item in basket_items:
+            match_result = self.match_input_item_by_name(
+                name=basket_item["input_value"],
+                quantity=basket_item["quantity"],
+                products_by_normalized_name=products_by_normalized_name,
+            )
+            matched_items.append(match_result)
+            if match_result["match_status"] == MatchStatus.UNMATCHED.value:
+                unmatched_items.append(match_result["input_value"])
+
+        return {
+            "matched_items": matched_items,
+            "unmatched_items": unmatched_items,
+        }
+
     def _normalize_barcode(self, barcode: Any) -> str:
         """Return a trimmed barcode string."""
         if not isinstance(barcode, str):
@@ -92,6 +182,17 @@ class BasketEngine:
             raise ValueError("barcode is required")
 
         return normalized_barcode
+
+    def _normalize_name(self, name: Any) -> str:
+        """Return an MVP-normalized product-name string."""
+        if not isinstance(name, str):
+            raise TypeError("name must be a string")
+
+        normalized_name = normalize_product_name(name)
+        if not normalized_name:
+            raise ValueError("name is required")
+
+        return normalized_name
 
     def _validate_quantity(self, quantity: Any) -> int:
         """Validate that quantity is a positive integer."""

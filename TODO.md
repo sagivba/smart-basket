@@ -84,11 +84,11 @@
 - [ ] Add matching unit tests
 
 ## 14. Name-based product matching
-- [ ] Implement normalized-name product matching
-- [ ] Return a single match for unambiguous results
-- [ ] Return candidate lists for ambiguous matches
-- [ ] Mark unknown names as unmatched
-- [ ] Add matching unit tests
+- [x] Implement normalized-name product matching
+- [x] Return a single match for unambiguous results
+- [x] Return candidate lists for ambiguous matches
+- [x] Mark unknown names as unmatched
+- [x] Add matching unit tests
 
 ## 15. Basket calculation
 - [x] Implement basket item validation before calculation

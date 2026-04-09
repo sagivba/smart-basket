@@ -19,8 +19,8 @@
 - [x] Add unit tests for result model behavior
 
 ## 4. Text utilities and validators
-- [ ] Implement text normalization helpers
-- [ ] Implement product name normalization helpers
+- [x] Implement text normalization helpers
+- [x] Implement product name normalization helpers
 - [ ] Implement barcode, quantity, price, and required-field validation
 - [ ] Add unit tests for utilities and validators
 
@@ -137,7 +137,7 @@
 
 ## 21. Unit tests by module
 - [x] Complete `test_models.py`
-- [ ] Complete `test_utils.py` *(partial: file exists, currently empty)*
+- [x] Complete `test_utils.py` *(text utility coverage added)*
 - [ ] Complete `test_db.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_data.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*

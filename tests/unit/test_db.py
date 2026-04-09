@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 
 from Modules.db.database import ConnectionFactory, DatabaseManager, create_schema
-from Modules.db.repositories import BasketRepository
-from Modules.models.entities import BasketItem
+from Modules.db.repositories import BasketRepository, ProductRepository
+from Modules.models.entities import BasketItem, Product
 
 
 class TestConnectionFactoryAndSchema(unittest.TestCase):
@@ -342,6 +342,158 @@ class TestBasketRepository(unittest.TestCase):
         self.assertEqual(basket_500_items, [])
         self.assertEqual(len(basket_501_items), 1)
         self.assertEqual(basket_501_items[0].id, second.id)
+
+
+class TestProductRepository(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database_path = Path(self.temp_dir.name) / "products.db"
+        self.connection = ConnectionFactory.create_connection(str(self.database_path))
+        create_schema(self.connection)
+        self.repository = ProductRepository(self.connection)
+
+    def tearDown(self) -> None:
+        self.connection.close()
+        self.temp_dir.cleanup()
+
+    @staticmethod
+    def _make_product(
+        *,
+        barcode: str,
+        name: str,
+        normalized_name: str,
+        brand: str | None = None,
+        unit_name: str | None = None,
+    ) -> Product:
+        return Product(
+            id=None,
+            barcode=barcode,
+            name=name,
+            normalized_name=normalized_name,
+            brand=brand,
+            unit_name=unit_name,
+        )
+
+    def test_upsert_product_inserts_new_product(self) -> None:
+        saved = self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000001",
+                name="Milk 1L",
+                normalized_name="milk 1l",
+                brand="Dairy Co",
+                unit_name="1L",
+            )
+        )
+
+        self.assertIsNotNone(saved.id)
+        self.assertEqual(saved.barcode, "7290000000001")
+
+    def test_upsert_product_updates_existing_row_by_barcode(self) -> None:
+        original = self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000002",
+                name="Bread White",
+                normalized_name="bread white",
+                brand="Bake Co",
+                unit_name="750g",
+            )
+        )
+        updated = self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000002",
+                name="Bread Whole Wheat",
+                normalized_name="bread whole wheat",
+                brand="Bake House",
+                unit_name="800g",
+            )
+        )
+
+        self.assertEqual(updated.id, original.id)
+        self.assertEqual(updated.name, "Bread Whole Wheat")
+        count = self.connection.execute(
+            "SELECT COUNT(*) FROM products WHERE barcode = ?",
+            ("7290000000002",),
+        ).fetchone()[0]
+        self.assertEqual(count, 1)
+
+    def test_get_by_barcode_returns_exact_match(self) -> None:
+        self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000003",
+                name="Eggs L",
+                normalized_name="eggs l",
+            )
+        )
+
+        product = self.repository.get_by_barcode("7290000000003")
+
+        self.assertIsNotNone(product)
+        self.assertEqual(product.barcode, "7290000000003")
+        self.assertEqual(product.name, "Eggs L")
+
+    def test_get_by_barcode_returns_none_when_missing(self) -> None:
+        self.assertIsNone(self.repository.get_by_barcode("0000000000000"))
+
+    def test_get_by_normalized_name_returns_ordered_matches(self) -> None:
+        first = self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000010",
+                name="Tuna in Water",
+                normalized_name="tuna",
+            )
+        )
+        second = self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000011",
+                name="Tuna in Oil",
+                normalized_name="tuna",
+            )
+        )
+        self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000012",
+                name="Corn",
+                normalized_name="corn",
+            )
+        )
+
+        products = self.repository.get_by_normalized_name("tuna")
+
+        self.assertEqual([product.id for product in products], [first.id, second.id])
+        self.assertEqual([product.normalized_name for product in products], ["tuna", "tuna"])
+
+    def test_get_by_normalized_name_returns_empty_list_when_missing(self) -> None:
+        self.assertEqual(self.repository.get_by_normalized_name("not-found"), [])
+
+    def test_get_by_ids_returns_rows_in_deterministic_order(self) -> None:
+        first = self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000020",
+                name="Cheese",
+                normalized_name="cheese",
+            )
+        )
+        second = self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000021",
+                name="Yogurt",
+                normalized_name="yogurt",
+            )
+        )
+        third = self.repository.upsert_product(
+            self._make_product(
+                barcode="7290000000022",
+                name="Butter",
+                normalized_name="butter",
+            )
+        )
+
+        products = self.repository.get_by_ids([third.id, first.id, second.id, 99999])
+
+        self.assertEqual([product.id for product in products], [first.id, second.id, third.id])
+
+    def test_get_by_ids_returns_empty_list_for_empty_input(self) -> None:
+        self.assertEqual(self.repository.get_by_ids([]), [])
 
 
 if __name__ == "__main__":

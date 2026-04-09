@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import unittest
 
-from Modules.engine.basket_engine import BasketEngine
+from Modules.engine.basket_engine import BasketCalculator, BasketComparisonService, BasketEngine
+from Modules.models.entities import BasketItem
 from Modules.models.results import (
     AvailabilityStatus,
     BasketComparisonResult,
     BasketLineResult,
     ChainComparisonResult,
+    MatchStatus,
 )
 
 
@@ -316,6 +318,145 @@ class TestBasketEngineResultBuilding(unittest.TestCase):
                 chain_name="Chain X",
                 basket_items=[{"quantity": 1, "unit_price": 5.0}],
             )
+
+
+class _StubChainRepository:
+    def list_chains(self) -> list[dict[str, object]]:
+        return [
+            {"id": 30, "name": "Partial Cheap"},
+            {"id": 10, "name": "Complete Mid"},
+            {"id": 20, "name": "Complete Expensive"},
+            {"id": 40, "name": "Partial Expensive"},
+            {"id": 25, "name": "Complete Mid Alt"},
+        ]
+
+
+class _StubProductRepository:
+    def get_products_by_ids(self, product_ids: list[int]) -> list[dict[str, object]]:
+        lookup = {
+            1: {"id": 1, "name": "Milk", "barcode": "111"},
+            2: {"id": 2, "name": "Bread", "barcode": "222"},
+        }
+        return [lookup[product_id] for product_id in product_ids if product_id in lookup]
+
+
+class _StubPriceRepository:
+    def get_prices_for_products_by_chain(
+        self, product_ids: list[int]
+    ) -> list[dict[str, object]]:
+        rows = [
+            {"chain_id": 10, "product_id": 1, "price": 5.0},
+            {"chain_id": 10, "product_id": 2, "price": 3.0},
+            {"chain_id": 20, "product_id": 1, "price": 6.0},
+            {"chain_id": 20, "product_id": 2, "price": 4.0},
+            {"chain_id": 25, "product_id": 1, "price": 5.0},
+            {"chain_id": 25, "product_id": 2, "price": 3.0},
+            {"chain_id": 30, "product_id": 1, "price": 2.0},
+            {"chain_id": 40, "product_id": 1, "price": 7.0},
+        ]
+        return [row for row in rows if int(row["product_id"]) in product_ids]
+
+
+class TestBasketComparisonService(unittest.TestCase):
+    def setUp(self) -> None:
+        self.service = BasketComparisonService(
+            chain_repository=_StubChainRepository(),
+            product_repository=_StubProductRepository(),
+            price_repository=_StubPriceRepository(),
+            calculator=BasketCalculator(engine=BasketEngine()),
+        )
+
+    def test_compare_basket_ranks_complete_before_partial_then_by_total_price(self) -> None:
+        result = self.service.compare_basket(
+            [
+                BasketItem(
+                    id=1,
+                    basket_id=100,
+                    product_id=1,
+                    input_value="111",
+                    input_type="barcode",
+                    quantity=1,
+                    match_status="matched",
+                ),
+                BasketItem(
+                    id=2,
+                    basket_id=100,
+                    product_id=2,
+                    input_value="222",
+                    input_type="barcode",
+                    quantity=1,
+                    match_status="matched",
+                ),
+                BasketItem(
+                    id=3,
+                    basket_id=100,
+                    product_id=None,
+                    input_value="999",
+                    input_type="barcode",
+                    quantity=1,
+                    match_status="unmatched",
+                ),
+            ]
+        )
+
+        self.assertIsInstance(result, BasketComparisonResult)
+        self.assertEqual(
+            [chain.chain_id for chain in result.ranked_chains],
+            [10, 25, 20, 30, 40],
+        )
+        self.assertEqual([chain.total_price for chain in result.ranked_chains], [8.0, 8.0, 10.0, 2.0, 7.0])
+        self.assertTrue(result.ranked_chains[0].is_complete_basket)
+        self.assertTrue(result.ranked_chains[1].is_complete_basket)
+        self.assertFalse(result.ranked_chains[3].is_complete_basket)
+        self.assertEqual(result.ranked_chains[3].missing_items, ["Bread"])
+        self.assertEqual(result.unmatched_items, ["999"])
+
+    def test_compare_basket_keeps_unmatched_separate_from_missing_chain_items(self) -> None:
+        result = self.service.compare_basket(
+            [
+                BasketItem(
+                    id=1,
+                    basket_id=200,
+                    product_id=1,
+                    input_value="111",
+                    input_type="barcode",
+                    quantity=2,
+                    match_status="matched",
+                ),
+                BasketItem(
+                    id=2,
+                    basket_id=200,
+                    product_id=999,
+                    input_value="ghost",
+                    input_type="name",
+                    quantity=1,
+                    match_status="matched",
+                ),
+            ]
+        )
+
+        self.assertEqual(result.unmatched_items, ["ghost"])
+        first_chain = result.ranked_chains[0]
+        self.assertEqual([line.product_name for line in first_chain.basket_lines], ["Milk"])
+        self.assertNotIn("ghost", first_chain.missing_items)
+        self.assertEqual(first_chain.found_items_count + first_chain.missing_items_count, 1)
+
+    def test_rank_chains_uses_deterministic_chain_id_tie_breaker(self) -> None:
+        complete_results = [
+            BasketCalculator(engine=BasketEngine()).calculate_chain(
+                chain={"id": 9, "name": "Z"},
+                matched_items=[{"product_id": 1, "product_name": "Milk", "barcode": "111", "quantity": 1}],
+                unit_prices_by_product_id={1: 5.0},
+            ),
+            BasketCalculator(engine=BasketEngine()).calculate_chain(
+                chain={"id": 4, "name": "A"},
+                matched_items=[{"product_id": 1, "product_name": "Milk", "barcode": "111", "quantity": 1}],
+                unit_prices_by_product_id={1: 5.0},
+            ),
+        ]
+
+        ranked = self.service.rank_chains(complete_results)
+        self.assertEqual([chain.chain_id for chain in ranked], [4, 9])
 
 
 if __name__ == "__main__":

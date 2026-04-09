@@ -318,5 +318,91 @@ class TestBasketEngineResultBuilding(unittest.TestCase):
             )
 
 
+class TestBasketEngineBarcodeMatching(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = BasketEngine()
+
+    def test_match_input_item_by_barcode_returns_matched_structure(self) -> None:
+        result = self.engine.match_input_item_by_barcode(
+            barcode=" 12345 ",
+            quantity=2,
+            products_by_barcode={
+                "12345": {"id": 10, "name": "Milk", "barcode": "12345"},
+            },
+        )
+
+        self.assertEqual(
+            result,
+            {
+                "input_type": "barcode",
+                "input_value": "12345",
+                "quantity": 2,
+                "match_status": "matched",
+                "product_id": 10,
+                "product_name": "Milk",
+                "barcode": "12345",
+            },
+        )
+
+    def test_match_input_item_by_barcode_returns_unmatched_structure(self) -> None:
+        result = self.engine.match_input_item_by_barcode(
+            barcode="99999",
+            quantity=1,
+            products_by_barcode={"12345": {"id": 10, "name": "Milk"}},
+        )
+
+        self.assertEqual(
+            result,
+            {
+                "input_type": "barcode",
+                "input_value": "99999",
+                "quantity": 1,
+                "match_status": "unmatched",
+                "product_id": None,
+                "product_name": None,
+                "barcode": "99999",
+            },
+        )
+
+    def test_match_input_item_by_barcode_rejects_invalid_inputs(self) -> None:
+        with self.assertRaisesRegex(TypeError, "barcode must be a string"):
+            self.engine.match_input_item_by_barcode(
+                barcode=12345,
+                quantity=1,
+                products_by_barcode={},
+            )
+
+        with self.assertRaisesRegex(ValueError, "barcode is required"):
+            self.engine.match_input_item_by_barcode(
+                barcode="   ",
+                quantity=1,
+                products_by_barcode={},
+            )
+
+        with self.assertRaisesRegex(ValueError, "quantity must be a positive integer"):
+            self.engine.match_input_item_by_barcode(
+                barcode="12345",
+                quantity=0,
+                products_by_barcode={},
+            )
+
+    def test_match_basket_items_by_barcode_collects_unmatched_values(self) -> None:
+        result = self.engine.match_basket_items_by_barcode(
+            basket_items=[
+                {"input_value": "12345", "quantity": 1},
+                {"input_value": "99999", "quantity": 2},
+            ],
+            products=[
+                {"id": 10, "name": "Milk", "barcode": "12345"},
+                {"id": 11, "name": "Bread", "barcode": None},
+            ],
+        )
+
+        self.assertEqual(len(result["matched_items"]), 2)
+        self.assertEqual(result["matched_items"][0]["match_status"], "matched")
+        self.assertEqual(result["matched_items"][1]["match_status"], "unmatched")
+        self.assertEqual(result["unmatched_items"], ["99999"])
+
+
 if __name__ == "__main__":
     unittest.main()

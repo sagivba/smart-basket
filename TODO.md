@@ -64,24 +64,24 @@
 - [x] Add parser infrastructure unit tests
 
 ## 11. Product, store, and price file parsing
-- [ ] Implement `parse_products_file()`
-- [ ] Implement `parse_prices_file()`
+- [x] Implement `parse_products_file()`
+- [x] Implement `parse_prices_file()`
 - [ ] Implement `parse_stores_file()`
-- [ ] Implement row normalization and invalid row handling
-- [ ] Add parsing unit tests with deterministic fixtures
+- [x] Implement row normalization and invalid row handling *(for product/price parsing flows)*
+- [x] Add parsing unit tests with deterministic fixtures
 
 ## 12. Data loader orchestration
-- [ ] Implement `LoadJob` and `LoadResult`
-- [ ] Implement `PriceDataLoader`
-- [ ] Implement `load_products()`, `load_prices()`, and `load_stores()`
-- [ ] Implement `replace` and `append` loading modes
-- [ ] Add loader unit tests
+- [x] Implement `LoadJob` and `LoadResult`
+- [x] Implement `PriceDataLoader`
+- [x] Implement `load_products()`, `load_prices()`, and `load_stores()`
+- [x] Implement `replace` and `append` loading modes
+- [x] Add loader unit tests
 
 ## 13. Barcode-based product matching
-- [ ] Implement direct product matching by barcode
-- [ ] Mark unknown barcode items as unmatched
-- [ ] Return a consistent matching result structure
-- [ ] Add matching unit tests
+- [x] Implement direct product matching by barcode
+- [x] Mark unknown barcode items as unmatched
+- [x] Return a consistent matching result structure
+- [x] Add matching unit tests
 
 ## 14. Name-based product matching
 - [ ] Implement normalized-name product matching
@@ -91,26 +91,26 @@
 - [ ] Add matching unit tests
 
 ## 15. Basket calculation
-- [ ] Implement basket item validation before calculation
-- [ ] Implement matched product ID collection
-- [ ] Implement line price and total chain cost calculation
-- [ ] Implement found item counting
-- [ ] Add calculation unit tests
+- [x] Implement basket item validation before calculation
+- [x] Implement matched product ID collection
+- [x] Implement line price and total chain cost calculation
+- [x] Implement found item counting
+- [x] Add calculation unit tests
 
 ## 16. Missing item handling and structured result building
-- [ ] Mark missing products per chain
-- [ ] Implement `missing_items` collection
-- [ ] Implement `is_complete_basket`
-- [ ] Build `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
-- [ ] Return `unmatched_items` separately
-- [ ] Add unit tests
+- [x] Mark missing products per chain
+- [x] Implement `missing_items` collection
+- [x] Implement `is_complete_basket`
+- [x] Build `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
+- [x] Return `unmatched_items` separately
+- [x] Add unit tests
 
 ## 17. Chain ranking and comparison service
-- [ ] Implement `BasketCalculator` integration into comparison flow
-- [ ] Implement `BasketComparisonService`
-- [ ] Implement `compare_basket()`
-- [ ] Implement `rank_chains()` with complete baskets ranked before partial baskets
-- [ ] Add unit tests for ranking and comparison behavior
+- [x] Implement `BasketCalculator` integration into comparison flow
+- [x] Implement `BasketComparisonService`
+- [x] Implement `compare_basket()`
+- [x] Implement `rank_chains()` with complete baskets ranked before partial baskets
+- [x] Add unit tests for ranking and comparison behavior
 
 ## 18. Application service and use cases
 - [x] Implement `ApplicationService`

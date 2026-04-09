@@ -225,42 +225,38 @@ class CliMatcher:
 
     def _match_name(self, *, basket_id: int, name: str, quantity: int) -> BasketItem:
         normalized_name = normalize_product_name(name)
-        if not normalized_name:
-            raise ValueError("input_value is required")
-
-        if quantity <= 0:
-            raise ValueError("quantity must be a positive integer")
-
-        row = self._connection.execute(
+        product_rows = self._connection.execute(
             """
-            SELECT id, normalized_name
+            SELECT id, name, barcode, normalized_name
             FROM products
             WHERE normalized_name = ?
             ORDER BY id
-            LIMIT 1
             """,
             (normalized_name,),
-        ).fetchone()
-
-        if row is None:
-            return BasketItem(
-                id=None,
-                basket_id=basket_id,
-                product_id=None,
-                input_value=name.strip(),
-                input_type="name",
-                quantity=quantity,
-                match_status=MatchStatus.UNMATCHED.value,
-            )
-
+        ).fetchall()
+        matched = self._engine.match_input_item_by_name(
+            name=name,
+            quantity=quantity,
+            products_by_normalized_name={
+                normalized_name: [
+                    {
+                        "id": int(row[0]),
+                        "name": str(row[1]),
+                        "barcode": str(row[2]),
+                        "normalized_name": str(row[3]),
+                    }
+                    for row in product_rows
+                ]
+            },
+        )
         return BasketItem(
             id=None,
             basket_id=basket_id,
-            product_id=int(row[0]),
-            input_value=name.strip(),
-            input_type="name",
-            quantity=quantity,
-            match_status=MatchStatus.MATCHED.value,
+            product_id=matched["product_id"],
+            input_value=matched["input_value"],
+            input_type=matched["input_type"],
+            quantity=matched["quantity"],
+            match_status=matched["match_status"],
         )
 
 

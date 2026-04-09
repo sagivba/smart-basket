@@ -106,11 +106,11 @@
 - [x] Add unit tests
 
 ## 17. Chain ranking and comparison service
-- [ ] Implement `BasketCalculator` integration into comparison flow
-- [ ] Implement `BasketComparisonService`
-- [ ] Implement `compare_basket()`
-- [ ] Implement `rank_chains()` with complete baskets ranked before partial baskets
-- [ ] Add unit tests for ranking and comparison behavior
+- [x] Implement `BasketCalculator` integration into comparison flow
+- [x] Implement `BasketComparisonService`
+- [x] Implement `compare_basket()`
+- [x] Implement `rank_chains()` with complete baskets ranked before partial baskets
+- [x] Add unit tests for ranking and comparison behavior
 
 ## 18. Application service and use cases
 - [x] Implement `ApplicationService`

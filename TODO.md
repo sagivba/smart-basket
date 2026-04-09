@@ -31,11 +31,11 @@
 - [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
-- [ ] Implement product upsert
-- [ ] Implement lookup by barcode
-- [ ] Implement lookup by normalized name
-- [ ] Implement retrieval by product IDs
-- [ ] Add repository unit tests *(partial: repository tests currently cover `BasketRepository` only)*
+- [x] Implement product upsert
+- [x] Implement lookup by barcode
+- [x] Implement lookup by normalized name
+- [x] Implement retrieval by product IDs
+- [x] Add repository unit tests
 
 ## 7. ChainRepository and StoreRepository
 - [ ] Implement chain upsert and lookup operations

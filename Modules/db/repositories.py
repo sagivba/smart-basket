@@ -4,7 +4,95 @@ from __future__ import annotations
 
 import sqlite3
 
-from Modules.models.entities import BasketItem
+from Modules.models.entities import BasketItem, Product
+
+
+class ProductRepository:
+    """Persistence operations for products."""
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+
+    def upsert_product(self, product: Product) -> Product:
+        """Insert or update a product by barcode and return the persisted row."""
+        cursor = self._connection.execute(
+            """
+            INSERT INTO products (barcode, name, normalized_name, brand, unit_name)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(barcode) DO UPDATE SET
+                name = excluded.name,
+                normalized_name = excluded.normalized_name,
+                brand = excluded.brand,
+                unit_name = excluded.unit_name
+            RETURNING id, barcode, name, normalized_name, brand, unit_name
+            """,
+            (
+                product.barcode,
+                product.name,
+                product.normalized_name,
+                product.brand,
+                product.unit_name,
+            ),
+        )
+        row = cursor.fetchone()
+        self._connection.commit()
+        return self._row_to_product(row)
+
+    def get_by_barcode(self, barcode: str) -> Product | None:
+        """Return a single product by exact barcode, if it exists."""
+        row = self._connection.execute(
+            """
+            SELECT id, barcode, name, normalized_name, brand, unit_name
+            FROM products
+            WHERE barcode = ?
+            """,
+            (barcode,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_product(row)
+
+    def get_by_normalized_name(self, normalized_name: str) -> list[Product]:
+        """Return all products with the exact normalized name."""
+        rows = self._connection.execute(
+            """
+            SELECT id, barcode, name, normalized_name, brand, unit_name
+            FROM products
+            WHERE normalized_name = ?
+            ORDER BY id
+            """,
+            (normalized_name,),
+        ).fetchall()
+        return [self._row_to_product(row) for row in rows]
+
+    def get_by_ids(self, product_ids: list[int]) -> list[Product]:
+        """Return products for the provided identifiers in deterministic order."""
+        if not product_ids:
+            return []
+
+        placeholders = ",".join("?" for _ in product_ids)
+        rows = self._connection.execute(
+            f"""
+            SELECT id, barcode, name, normalized_name, brand, unit_name
+            FROM products
+            WHERE id IN ({placeholders})
+            ORDER BY id
+            """,
+            tuple(product_ids),
+        ).fetchall()
+        return [self._row_to_product(row) for row in rows]
+
+    @staticmethod
+    def _row_to_product(row: sqlite3.Row | tuple[object, ...]) -> Product:
+        """Map a row from products to a Product entity."""
+        return Product(
+            id=row[0],
+            barcode=row[1],
+            name=row[2],
+            normalized_name=row[3],
+            brand=row[4],
+            unit_name=row[5],
+        )
 
 
 class BasketRepository:

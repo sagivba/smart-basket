@@ -320,6 +320,72 @@ class TestBasketEngineResultBuilding(unittest.TestCase):
             )
 
 
+class TestBasketEngineMatching(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = BasketEngine()
+
+    def test_match_input_item_by_barcode_returns_matched_structure(self) -> None:
+        matched = self.engine.match_input_item_by_barcode(
+            barcode=" 12345 ",
+            quantity=2,
+            products_by_barcode={"12345": {"id": 7, "name": "Milk", "barcode": "12345"}},
+        )
+
+        self.assertEqual(matched["input_type"], "barcode")
+        self.assertEqual(matched["input_value"], "12345")
+        self.assertEqual(matched["quantity"], 2)
+        self.assertEqual(matched["match_status"], MatchStatus.MATCHED.value)
+        self.assertEqual(matched["product_id"], 7)
+        self.assertEqual(matched["product_name"], "Milk")
+
+    def test_match_basket_items_by_barcode_collects_unmatched_values(self) -> None:
+        result = self.engine.match_basket_items_by_barcode(
+            basket_items=[
+                {"input_value": "111", "quantity": 1},
+                {"input_value": "999", "quantity": 1},
+            ],
+            products=[{"id": 1, "barcode": "111", "name": "Milk"}],
+        )
+
+        self.assertEqual(len(result["matched_items"]), 2)
+        self.assertEqual(result["matched_items"][0]["match_status"], MatchStatus.MATCHED.value)
+        self.assertEqual(result["matched_items"][1]["match_status"], MatchStatus.UNMATCHED.value)
+        self.assertEqual(result["unmatched_items"], ["999"])
+
+    def test_match_input_item_by_name_returns_ambiguous_candidates(self) -> None:
+        result = self.engine.match_input_item_by_name(
+            name="Milk",
+            quantity=1,
+            products_by_normalized_name={
+                "milk": [
+                    {"id": 1, "name": "Milk 1L", "barcode": "111"},
+                    {"id": 2, "name": "Milk 3%", "barcode": "222"},
+                ]
+            },
+        )
+
+        self.assertEqual(result["match_status"], MatchStatus.AMBIGUOUS.value)
+        self.assertEqual(result["product_id"], None)
+        self.assertEqual(len(result["candidate_products"]), 2)
+
+    def test_match_basket_items_by_name_normalizes_input_and_collects_unmatched(self) -> None:
+        result = self.engine.match_basket_items_by_name(
+            basket_items=[
+                {"input_value": "  MILK  ", "quantity": 1},
+                {"input_value": "unknown", "quantity": 1},
+            ],
+            products=[
+                {"id": 10, "name": "Milk", "barcode": "111", "normalized_name": "milk"},
+            ],
+        )
+
+        self.assertEqual(result["matched_items"][0]["match_status"], MatchStatus.MATCHED.value)
+        self.assertEqual(result["matched_items"][0]["input_value"], "milk")
+        self.assertEqual(result["matched_items"][1]["match_status"], MatchStatus.UNMATCHED.value)
+        self.assertEqual(result["unmatched_items"], ["unknown"])
+
+
+
 class _StubChainRepository:
     def list_chains(self) -> list[dict[str, object]]:
         return [

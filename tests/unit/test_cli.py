@@ -76,6 +76,76 @@ class TestCli(unittest.TestCase):
             self.assertEqual(stderr.getvalue(), "")
             self.assertIn("status=matched", stdout.getvalue())
 
+
+    def test_add_item_name_command_marks_unmatched_when_product_name_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "cli.sqlite"
+            connection = sqlite3.connect(db_path)
+            create_schema(connection)
+            connection.commit()
+            connection.close()
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            exit_code = run_cli(
+                [
+                    "--db-path",
+                    str(db_path),
+                    "add-item",
+                    "100",
+                    "Unknown Product",
+                    "--input-type",
+                    "name",
+                    "--quantity",
+                    "1",
+                ],
+                stdout=stdout,
+                stderr=stderr,
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stderr.getvalue(), "")
+            self.assertIn("status=unmatched", stdout.getvalue())
+
+    def test_add_item_name_command_matches_normalized_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "cli.sqlite"
+            connection = sqlite3.connect(db_path)
+            create_schema(connection)
+            connection.execute(
+                """
+                INSERT INTO products (barcode, name, normalized_name, brand, unit_name)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                ("12345", "Milk 1L", "milk 1l", None, None),
+            )
+            connection.commit()
+            connection.close()
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            exit_code = run_cli(
+                [
+                    "--db-path",
+                    str(db_path),
+                    "add-item",
+                    "100",
+                    "  MILK 1L  ",
+                    "--input-type",
+                    "name",
+                    "--quantity",
+                    "1",
+                ],
+                stdout=stdout,
+                stderr=stderr,
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stderr.getvalue(), "")
+            self.assertIn("status=matched", stdout.getvalue())
+
     def test_compare_command_prints_ranked_results_missing_and_unmatched(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "cli.sqlite"

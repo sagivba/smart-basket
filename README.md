@@ -1,88 +1,159 @@
 # smart-basket
 
-Local-first MVP scaffold for basket price comparison across retail chains.
+Local-first MVP for comparing basket costs across retail chains using local files, local SQLite, and deterministic `unittest` coverage.
 
-## Current status
+## Project constraints (current baseline)
 
-The repository is in active MVP development.
-Core modules and unit tests exist, while several roadmap items are still open in `TODO.md`.
+- **Local-First only**: no backend, no remote sync, no cloud dependency in runtime flows.
+- **Python 3.12**: the documented and CI target runtime for this repository.
+- **SQLite only**: persistence layer is implemented with Python `sqlite3` and local database files.
+- **`unittest` only**: test suite is implemented and run with standard-library `unittest`.
+- **Layered architecture preserved**:
+  - `Modules/data`
+  - `Modules/db`
+  - `Modules/engine`
+  - `Modules/app`
+  - `Modules/models`
+  - `Modules/utils`
 
-## Runtime and test baseline
+Source-of-truth behavior is defined in `docs/system_spec.md`.
 
-- Target Python version: **Python 3.12**.
-- CI workflow is configured to run unit tests with `actions/setup-python` using `python-version: '3.12'` in `.github/workflows/unit-tests.yml`.
-- Local command used by the project for test execution:
+---
+
+## Implementation status (evidence-based)
+
+Status labels used here:
+- **Implemented**: code exists and is covered by tests.
+- **Partial**: some behavior exists, but full target flow is not complete.
+- **Placeholder-only**: scaffolding or intended structure exists, but practical behavior is minimal.
+- **Missing**: not implemented yet.
+
+### Implemented
+
+- Core entities and result models in `Modules/models` with unit coverage.
+- Text normalization and input validators in `Modules/utils` with unit coverage.
+- SQLite connection factory, schema creation, and database manager in `Modules/db.database` with unit coverage.
+- `BasketRepository` CRUD-style persistence in `Modules/db.repositories` with unit coverage.
+- Parser infrastructure and product/store/price parsing in `Modules/data.parser` with unit coverage.
+- Local data-loading orchestration (`LoadJob`, `LoadResult`, `PriceDataLoader`) in `Modules/data.data_loader` with unit coverage.
+- Engine result-building logic for chain-level basket outputs in `Modules/engine.basket_engine` with unit + integration coverage.
+- Application-layer orchestration (`ApplicationService` and use-cases) in `Modules/app.application_service` with unit coverage.
+- Integration tests for import flow and basket comparison result-building.
+
+### Partial
+
+- Basket matching/comparison engine capabilities are present, but full comparison-service/ranking orchestration described in planning docs is not fully complete yet.
+- Repository coverage and implementations are complete for basket items, while broader product/chain/store/price repository interfaces remain incomplete.
+- App-layer basket lifecycle beyond item addition (update/remove/clear/full state flow) is still incomplete.
+
+### Placeholder-only
+
+- Repository/module layout for the full MVP roadmap exists and is documented, but some planned components are intentionally still skeletal relative to full scope.
+
+### Missing
+
+- CLI entry point and user-facing commands are **not implemented** yet.
+- No web UI, no backend/API, no auth/user management.
+- No remote synchronization.
+
+---
+
+## Repository structure
+
+```text
+.
+├── Modules/
+│   ├── app/
+│   ├── data/
+│   ├── db/
+│   ├── engine/
+│   ├── models/
+│   └── utils/
+├── docs/
+├── tests/
+│   ├── fixtures/
+│   ├── integration/
+│   └── unit/
+├── data/
+│   ├── generated/
+│   ├── raw/
+│   └── samples/
+├── README.md
+├── TODO.md
+└── requirements.txt
+```
+
+---
+
+## Installation
+
+### 1) Use Python 3.12
+
+```bash
+python3.12 --version
+```
+
+If your system maps `python` to 3.12 already:
+
+```bash
+python --version
+```
+
+### 2) Create a virtual environment (recommended)
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+```
+
+### 3) Install dependencies
+
+No third-party runtime/test dependencies are required at this stage.
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+---
+
+## Run / usage (current state)
+
+There is currently **no CLI entry point**.
+
+Current usage is module-driven (import/use in Python) and test-driven. The most reliable executable flows today are:
+
+1. Data import flow (integration-tested).
+2. Basket comparison result-building flow (integration-tested).
+3. Application service/use-case orchestration (unit-tested).
+
+### Run the integration flows directly via unittest
+
+```bash
+python -m unittest tests.integration.test_import_flow -v
+python -m unittest tests.integration.test_basket_comparison -v
+```
+
+### Run all tests (recommended)
 
 ```bash
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-### Evidence-based compatibility statement
+---
 
-Current repository evidence supports the following:
+## Testing policy
 
-1. The project is explicitly designed around Python 3.12 in project documentation (`AGENTS.md`, `docs/test_strategy.md`, and `docs/system_spec.md`).
-2. CI is configured to execute tests on Python 3.12.
-3. In this repository environment, tests also execute successfully on Python 3.10.
+- Framework: **`unittest` only**.
+- Tests are local and deterministic.
+- No network-required test flows.
+- See `docs/test_strategy.md` for conventions and scope.
 
-This provides a clear **Python 3.12 expectation and CI validation path**, while local execution on a given machine still depends on that machine having Python 3.12 installed.
+---
 
-## Offline and local-only assumptions
+## What this README intentionally does not claim
 
-This MVP is intentionally local-first and offline-capable.
-
-### In scope
-
-- local file parsing from repository/host filesystem
-- local SQLite storage
-- local basket comparison logic
-- deterministic local unit tests via `unittest`
-
-### Out of scope
-
-- backend services
-- remote sync
-- cloud dependencies
-- API/web UI runtime assumptions
-- network-required test flows
-
-### Practical offline boundary
-
-Repository code and tests are written to run without network access.
-Dependency policy also prefers standard-library-only behavior (see `requirements.txt`, which currently states no third-party packages are required).
-
-CI itself runs in GitHub-hosted infrastructure, but runtime behavior under test remains local/offline in design and implementation.
-
-## Running tests locally
-
-From repository root:
-
-```bash
-python -m unittest discover -s tests -p "test_*.py" -v
-```
-
-If you want to match CI expectations exactly, run this with Python 3.12.
-
-## Basic CLI (local MVP consumer)
-
-Run the CLI with Python module execution:
-
-```bash
-python -m Modules.app.cli --help
-```
-
-Examples:
-
-```bash
-# load local files
-python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite load products tests/fixtures/parser/products_valid.csv
-python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite load stores <stores_file.csv>
-python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite load prices <prices_file.csv>
-
-# add basket items
-python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite add-item 1 7290012345678 --input-type barcode --quantity 2
-python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite add-item 1 "milk 1l" --input-type name --quantity 1
-
-# compare basket
-python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite compare 1
-```
+To keep documentation accurate, this README does **not** claim:
+- a finished CLI,
+- completed end-to-end comparison-service orchestration beyond what tests currently verify,
+- any backend/API/web runtime,
+- any non-local execution dependency.

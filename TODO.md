@@ -13,10 +13,10 @@
 - [ ] Add unit tests for entity creation and basic validation
 
 ## 3. Result models and enums
-- [ ] Implement `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
-- [ ] Implement `MatchStatus` and `AvailabilityStatus`
+- [x] Implement `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
+- [x] Implement `MatchStatus` and `AvailabilityStatus`
 - [ ] Add shared constants needed by result models
-- [ ] Add unit tests for result model behavior
+- [x] Add unit tests for result model behavior
 
 ## 4. Text utilities and validators
 - [ ] Implement text normalization helpers
@@ -136,7 +136,7 @@
 - [ ] Add CLI-level tests if applicable
 
 ## 21. Unit tests by module
-- [ ] Complete `test_models.py` *(partial: file exists, currently empty)*
+- [x] Complete `test_models.py`
 - [ ] Complete `test_utils.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_db.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_data.py` *(partial: file exists, currently empty)*

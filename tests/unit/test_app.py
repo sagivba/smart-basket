@@ -8,9 +8,13 @@ from unittest.mock import Mock
 from Modules.app.application_service import (
     AddBasketItemUseCase,
     ApplicationService,
+    ClearBasketUseCase,
     CompareBasketUseCase,
+    GetBasketStateUseCase,
     ListChainsUseCase,
     LoadPricesUseCase,
+    RemoveBasketItemUseCase,
+    UpdateBasketItemQuantityUseCase,
 )
 from Modules.models.entities import BasketItem
 from Modules.models.results import BasketComparisonResult
@@ -114,12 +118,20 @@ class TestApplicationService(unittest.TestCase):
         add_basket_item_use_case = Mock()
         compare_basket_use_case = Mock()
         list_chains_use_case = Mock()
+        update_quantity_use_case = Mock()
+        remove_basket_item_use_case = Mock()
+        clear_basket_use_case = Mock()
+        get_basket_state_use_case = Mock()
 
         service = ApplicationService(
             load_prices_use_case=load_prices_use_case,
             add_basket_item_use_case=add_basket_item_use_case,
             compare_basket_use_case=compare_basket_use_case,
             list_chains_use_case=list_chains_use_case,
+            update_basket_item_quantity_use_case=update_quantity_use_case,
+            remove_basket_item_use_case=remove_basket_item_use_case,
+            clear_basket_use_case=clear_basket_use_case,
+            get_basket_state_use_case=get_basket_state_use_case,
         )
 
         load_request = {"prices_file": "data/samples/prices.csv"}
@@ -144,21 +156,167 @@ class TestApplicationService(unittest.TestCase):
         )
         compare_result = BasketComparisonResult(ranked_chains=[], unmatched_items=["bread"])
         chains_result = ["Chain A", "Chain B"]
+        updated_item = BasketItem(
+            id=42,
+            basket_id=88,
+            product_id=None,
+            input_value="bread",
+            input_type="name",
+            quantity=4,
+            match_status="unmatched",
+        )
+        basket_state = {"basket_id": 88, "item_count": 1, "items": []}
 
         load_prices_use_case.execute.return_value = {"accepted": 3}
         add_basket_item_use_case.execute.return_value = saved_item
         compare_basket_use_case.execute.return_value = compare_result
         list_chains_use_case.execute.return_value = chains_result
+        update_quantity_use_case.execute.return_value = updated_item
+        clear_basket_use_case.execute.return_value = 1
+        get_basket_state_use_case.execute.return_value = basket_state
 
         self.assertEqual(service.load_prices(load_request), {"accepted": 3})
         self.assertEqual(service.add_basket_item(input_item), saved_item)
         self.assertEqual(service.compare_basket(88), compare_result)
         self.assertEqual(service.list_chains(), chains_result)
+        self.assertEqual(service.update_basket_item_quantity(88, 42, 4), updated_item)
+        self.assertEqual(service.clear_basket(88), 1)
+        self.assertEqual(service.get_basket_state(88), basket_state)
+        service.remove_basket_item(88, 42)
 
         load_prices_use_case.execute.assert_called_once_with(load_request)
         add_basket_item_use_case.execute.assert_called_once_with(input_item)
         compare_basket_use_case.execute.assert_called_once_with(88)
         list_chains_use_case.execute.assert_called_once_with()
+        update_quantity_use_case.execute.assert_called_once_with(
+            basket_id=88,
+            item_id=42,
+            quantity=4,
+        )
+        remove_basket_item_use_case.execute.assert_called_once_with(
+            basket_id=88,
+            item_id=42,
+        )
+        clear_basket_use_case.execute.assert_called_once_with(basket_id=88)
+        get_basket_state_use_case.execute.assert_called_once_with(basket_id=88)
+
+
+class TestUpdateBasketItemQuantityUseCase(unittest.TestCase):
+    def test_execute_updates_existing_item_quantity(self) -> None:
+        repository = Mock()
+        existing_item = BasketItem(
+            id=9,
+            basket_id=100,
+            product_id=77,
+            input_value="milk",
+            input_type="name",
+            quantity=1,
+            match_status="matched",
+        )
+        repository.get_by_basket_id.return_value = [existing_item]
+        use_case = UpdateBasketItemQuantityUseCase(basket_repository=repository)
+
+        result = use_case.execute(basket_id=100, item_id=9, quantity=3)
+
+        self.assertEqual(result.quantity, 3)
+        repository.get_by_basket_id.assert_called_once_with(100)
+        repository.update_item.assert_called_once_with(result)
+
+    def test_execute_raises_for_invalid_quantity(self) -> None:
+        repository = Mock()
+        use_case = UpdateBasketItemQuantityUseCase(basket_repository=repository)
+
+        with self.assertRaises(ValueError):
+            use_case.execute(basket_id=100, item_id=9, quantity=0)
+
+        repository.get_by_basket_id.assert_not_called()
+        repository.update_item.assert_not_called()
+
+    def test_execute_raises_when_item_is_missing_from_basket(self) -> None:
+        repository = Mock()
+        repository.get_by_basket_id.return_value = []
+        use_case = UpdateBasketItemQuantityUseCase(basket_repository=repository)
+
+        with self.assertRaises(ValueError):
+            use_case.execute(basket_id=100, item_id=9, quantity=1)
+
+        repository.update_item.assert_not_called()
+
+
+class TestRemoveBasketItemUseCase(unittest.TestCase):
+    def test_execute_deletes_item_when_present(self) -> None:
+        repository = Mock()
+        existing_item = BasketItem(
+            id=9,
+            basket_id=100,
+            product_id=77,
+            input_value="milk",
+            input_type="name",
+            quantity=1,
+            match_status="matched",
+        )
+        repository.get_by_basket_id.return_value = [existing_item]
+        use_case = RemoveBasketItemUseCase(basket_repository=repository)
+
+        use_case.execute(basket_id=100, item_id=9)
+
+        repository.get_by_basket_id.assert_called_once_with(100)
+        repository.delete_item.assert_called_once_with(9)
+
+    def test_execute_raises_for_missing_item(self) -> None:
+        repository = Mock()
+        repository.get_by_basket_id.return_value = []
+        use_case = RemoveBasketItemUseCase(basket_repository=repository)
+
+        with self.assertRaises(ValueError):
+            use_case.execute(basket_id=100, item_id=9)
+
+        repository.delete_item.assert_not_called()
+
+
+class TestClearBasketUseCase(unittest.TestCase):
+    def test_execute_delegates_to_repository(self) -> None:
+        repository = Mock()
+        repository.clear_by_basket_id.return_value = 2
+        use_case = ClearBasketUseCase(basket_repository=repository)
+
+        result = use_case.execute(100)
+
+        self.assertEqual(result, 2)
+        repository.clear_by_basket_id.assert_called_once_with(100)
+
+
+class TestGetBasketStateUseCase(unittest.TestCase):
+    def test_execute_returns_stable_basket_state_structure(self) -> None:
+        repository = Mock()
+        repository.get_by_basket_id.return_value = [
+            BasketItem(
+                id=1,
+                basket_id=100,
+                product_id=10,
+                input_value="bread",
+                input_type="name",
+                quantity=2,
+                match_status="matched",
+            ),
+            BasketItem(
+                id=2,
+                basket_id=100,
+                product_id=None,
+                input_value="unknown",
+                input_type="name",
+                quantity=1,
+                match_status="unmatched",
+            ),
+        ]
+        use_case = GetBasketStateUseCase(basket_repository=repository)
+
+        result = use_case.execute(100)
+
+        self.assertEqual(result["basket_id"], 100)
+        self.assertEqual(result["item_count"], 2)
+        self.assertEqual(result["items"][0]["id"], 1)
+        self.assertEqual(result["items"][1]["match_status"], "unmatched")
 
 
 if __name__ == "__main__":

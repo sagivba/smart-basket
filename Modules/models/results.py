@@ -3,20 +3,27 @@
 from dataclasses import dataclass, field
 from enum import Enum
 
+MATCH_STATUS_MATCHED = "matched"
+MATCH_STATUS_UNMATCHED = "unmatched"
+MATCH_STATUS_AMBIGUOUS = "ambiguous"
+
+AVAILABILITY_STATUS_FOUND = "found"
+AVAILABILITY_STATUS_MISSING = "missing"
+
 
 class MatchStatus(str, Enum):
     """Status of an input basket item after matching."""
 
-    MATCHED = "matched"
-    UNMATCHED = "unmatched"
-    AMBIGUOUS = "ambiguous"
+    MATCHED = MATCH_STATUS_MATCHED
+    UNMATCHED = MATCH_STATUS_UNMATCHED
+    AMBIGUOUS = MATCH_STATUS_AMBIGUOUS
 
 
 class AvailabilityStatus(str, Enum):
     """Availability status of a matched product in a chain."""
 
-    FOUND = "found"
-    MISSING = "missing"
+    FOUND = AVAILABILITY_STATUS_FOUND
+    MISSING = AVAILABILITY_STATUS_MISSING
 
 
 @dataclass(slots=True)

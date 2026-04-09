@@ -238,11 +238,7 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
             parse_products_file(file_path)
 
     def test_parse_stores_file_csv_success(self) -> None:
-        file_path = self._write_temp_file(
-            ".csv",
-            "chain_code,chain_name,store_code,store_name,city,address,is_active\n"
-            "CH01,Chain One,ST10, Store Ten , Tel Aviv , 1 Main St , true \n",
-        )
+        file_path = self._fixture_path("stores_valid.csv")
 
         records, summary, errors = parse_stores_file(file_path)
 
@@ -259,10 +255,7 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertTrue(errors.is_empty())
 
     def test_parse_stores_file_tracks_invalid_row(self) -> None:
-        file_path = self._write_temp_file(
-            ".json",
-            '[{"chain_code": "CH01", "store_code": "ST10", "store_name": "Store Ten"}]',
-        )
+        file_path = self._fixture_path("stores_invalid_missing_chain_name.json")
 
         records, summary, errors = parse_stores_file(file_path)
 

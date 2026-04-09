@@ -22,21 +22,10 @@ class TestImportFlow(unittest.TestCase):
     def tearDown(self) -> None:
         self.connection.close()
 
-    def test_import_products_and_prices_persists_expected_rows(self) -> None:
-        self.connection.execute(
-            "INSERT INTO chains (chain_code, name) VALUES (?, ?)",
-            ("CHAIN_A", "Chain A"),
-        )
-        chain_id = self.connection.execute(
-            "SELECT id FROM chains WHERE chain_code = ?",
-            ("CHAIN_A",),
-        ).fetchone()[0]
-        self.connection.execute(
-            """
-            INSERT INTO stores (chain_id, store_code, name, city, address, is_active)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (chain_id, "STORE_1", "Store 1", "Tel Aviv", "Main 1", 1),
+    def test_import_products_and_stores_and_prices_persists_expected_rows(self) -> None:
+        stores_result = self.loader.load_stores(
+            self.fixtures_dir / "import_stores.csv",
+            mode="replace",
         )
 
         products_result = self.loader.load_products(
@@ -46,6 +35,35 @@ class TestImportFlow(unittest.TestCase):
         prices_result = self.loader.load_prices(
             self.fixtures_dir / "import_prices.csv",
             mode="append",
+        )
+
+        self.assertTrue(stores_result.success)
+        self.assertEqual(stores_result.accepted_count, 6)
+        self.assertEqual(stores_result.rejected_count, 0)
+
+        chain_rows = self.connection.execute(
+            "SELECT chain_code, name FROM chains ORDER BY chain_code"
+        ).fetchall()
+        self.assertEqual(
+            chain_rows,
+            [("CHAIN_A", "Chain A"), ("CHAIN_B", "Chain B")],
+        )
+
+        store_rows = self.connection.execute(
+            """
+            SELECT c.chain_code, s.store_code, s.name, s.city, s.address, s.is_active
+            FROM stores s
+            JOIN chains c ON c.id = s.chain_id
+            ORDER BY c.chain_code, s.store_code
+            """
+        ).fetchall()
+        self.assertEqual(
+            store_rows,
+            [
+                ("CHAIN_A", "STORE_1", "Chain A Downtown", "Tel Aviv", "Main 1", 1),
+                ("CHAIN_A", "STORE_2", "Chain A North", "Haifa", "Harbor 10", 1),
+                ("CHAIN_B", "STORE_9", "Chain B Center", "Jerusalem", "Market 5", 0),
+            ],
         )
 
         self.assertTrue(products_result.success)

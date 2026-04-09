@@ -146,6 +146,68 @@ class TestCli(unittest.TestCase):
             self.assertEqual(stderr.getvalue(), "")
             self.assertIn("status=matched", stdout.getvalue())
 
+    def test_add_item_name_command_marks_ambiguous_without_auto_selecting_product(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "cli.sqlite"
+            connection = sqlite3.connect(db_path)
+            create_schema(connection)
+            connection.execute(
+                """
+                INSERT INTO products (barcode, name, normalized_name, brand, unit_name)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                ("11111", "Milk 1L", "milk", None, None),
+            )
+            connection.execute(
+                """
+                INSERT INTO products (barcode, name, normalized_name, brand, unit_name)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                ("22222", "Milk 3%", "milk", None, None),
+            )
+            connection.commit()
+            connection.close()
+
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+
+            exit_code = run_cli(
+                [
+                    "--db-path",
+                    str(db_path),
+                    "add-item",
+                    "100",
+                    "Milk",
+                    "--input-type",
+                    "name",
+                    "--quantity",
+                    "1",
+                ],
+                stdout=stdout,
+                stderr=stderr,
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(stderr.getvalue(), "")
+            self.assertIn("status=ambiguous", stdout.getvalue())
+
+            persisted_connection = sqlite3.connect(db_path)
+            persisted_row = persisted_connection.execute(
+                """
+                SELECT product_id, match_status
+                FROM basket_items
+                WHERE basket_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (100,),
+            ).fetchone()
+            persisted_connection.close()
+
+            self.assertIsNotNone(persisted_row)
+            self.assertIsNone(persisted_row[0])
+            self.assertEqual(persisted_row[1], "ambiguous")
+
     def test_compare_command_prints_ranked_results_missing_and_unmatched(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "cli.sqlite"

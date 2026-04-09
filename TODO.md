@@ -15,7 +15,7 @@
 ## 3. Result models and enums
 - [x] Implement `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
 - [x] Implement `MatchStatus` and `AvailabilityStatus`
-- [ ] Add shared constants needed by result models
+- [x] Add shared constants needed by result models
 - [x] Add unit tests for result model behavior
 
 ## 4. Text utilities and validators

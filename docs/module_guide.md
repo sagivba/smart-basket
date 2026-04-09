@@ -1,145 +1,89 @@
-# Module Guide (implementation-aligned)
+# Module guide
 
-This guide reflects the **current repository state** and aligns with `docs/system_spec.md` as the source of truth. It describes what is implemented now, what is partial, what is placeholder-only, and what is missing.
+This document records a **narrow architecture audit** against `docs/system_spec.md` section 3.6 and section 4 (layered responsibilities).
 
-## Scope and constraints (current MVP)
+## Audit scope and method
 
-- **Local-First only** (no remote services).
-- **Python 3.12**, **SQLite**, **unittest**.
-- Layered architecture must stay strict:
-  - `Modules/data`
-  - `Modules/db`
-  - `Modules/engine`
-  - `Modules/app`
-  - `Modules/models`
-  - `Modules/utils`
+Checked modules and tests for evidence of separation between:
+- parsing (`Modules/data/parser.py`)
+- DB access/persistence (`Modules/db/*`)
+- business logic (`Modules/engine/*`)
+- application orchestration (`Modules/app/*`)
 
-## Dependency directions (allowed)
+Evidence was taken from implementation files and current `unittest` coverage only.
 
-```text
-Modules/app    -> Modules/data, Modules/engine, Modules/db (via protocols), Modules/models
-Modules/data   -> Modules/utils, Modules/db (SQLite persistence), Modules/models (optional contracts)
-Modules/engine -> Modules/models
-Modules/db     -> Modules/models
-Modules/models -> (no internal module dependencies required)
-Modules/utils  -> (standard library only)
-```
+## Classification legend
 
-### Dependency rules
+- **Implemented**: responsibility is present and evidence-backed in code and tests.
+- **Partial**: responsibility exists but boundaries are mixed or evidence is incomplete.
+- **Placeholder-only**: module/file exists but does not yet implement required behavior.
+- **Missing**: expected behavior is absent.
 
-- `Modules/app` is orchestration-only; do not place heavy comparison logic or raw SQL here.
-- `Modules/data` may parse/normalize and load into DB, but must not own basket comparison logic.
-- `Modules/db` owns schema/repository persistence only; no business decisions.
-- `Modules/engine` owns matching/calculation/result construction; it must not parse files directly.
-- `Modules/models` defines data contracts and result models; no infrastructure logic.
-- `Modules/utils` contains focused shared helpers only.
+## Layer audit status (current)
 
-## Layer status by module
+### Modules/data
+**Status: Partial**
 
-### `Modules/data`
+Implemented:
+- Parsing is isolated in `parser.py` with format detection, row normalization, validation, and structured parse errors.
 
-**Responsibility**
-- Parse local CSV/JSON source files.
-- Normalize row fields and collect structured parsing errors.
-- Orchestrate deterministic loading into SQLite tables.
+Boundary concern:
+- `PriceDataLoader` writes directly to SQLite and performs SQL lookups/upserts (`INSERT`, `DELETE`, `SELECT`) instead of delegating persistence to DB repositories.
+- This conflicts with the system spec expectation that DB layer owns persistence/query logic while data layer passes cleaned records forward.
 
-**Implemented**
-- `FileParser` format detection and parsing summary/error infrastructure.
-- Product/price/store parsing flows with field normalization and validation.
-- `PriceDataLoader` with `load_products`, `load_stores`, `load_prices`, plus append/replace handling.
+### Modules/db
+**Status: Partial**
 
-**Partial**
-- Loader currently writes directly with SQL in `PriceDataLoader`; repository-based persistence abstraction is not yet in place for non-basket entities.
+Implemented:
+- SQLite connection management and schema creation are implemented in `database.py`.
+- `BasketRepository` persistence methods are implemented and unit-tested.
 
-**Placeholder-only / Missing**
-- No broader import orchestration beyond current loader API.
+Missing/partial:
+- Repositories for products/chains/stores/prices are not implemented yet, leaving data loading to execute SQL directly from data layer.
 
-### `Modules/db`
+### Modules/engine
+**Status: Partial**
 
-**Responsibility**
-- SQLite connection management.
-- Schema creation/index creation.
-- Repository persistence APIs.
+Implemented:
+- Basket result-building logic (line construction, totals, missing tracking, unmatched passthrough) is implemented and tested.
+- Engine does not read files directly.
 
-**Implemented**
-- `ConnectionFactory`, `DatabaseManager`, and idempotent schema creation for products/chains/stores/prices/basket_items.
-- `BasketRepository` add/get/update/delete operations.
+Missing/partial:
+- Full comparison/ranking service behavior in TODO section 17 is still not complete.
 
-**Partial**
-- Product/chain/store/price repositories are not implemented as dedicated classes.
+### Modules/app
+**Status: Implemented (thin orchestration), with downstream dependency gaps**
 
-**Missing**
-- Repository APIs expected by future engine/application flows (product lookup, chain/store lookup, representative chain pricing queries).
+Implemented:
+- Use cases and `ApplicationService` delegate to collaborators via protocols and stay thin.
+- No direct SQL or raw parsing logic is present.
 
-### `Modules/engine`
+Caveat:
+- Because some lower-layer capabilities are partial, app behavior depends on placeholders/protocol stubs for parts of the full MVP flow.
 
-**Responsibility**
-- Basket item matching.
-- Price/missing detection and basket total calculations.
-- Structured comparison result generation.
+### Modules/models
+**Status: Implemented**
 
-**Implemented**
-- `BasketEngine` barcode matching helpers.
-- Calculation and result-building for chain-level output (`BasketLineResult`, `ChainComparisonResult`, `BasketComparisonResult`).
-- Missing-item detection and unmatched item passthrough in top-level result.
+Implemented:
+- Entities and result models are defined in dedicated model modules.
+- Models remain infrastructure-agnostic.
 
-**Partial**
-- Chain ranking policy from system spec (complete baskets before partial, then total price) is not implemented as a dedicated ranking workflow.
-- Name-based matching behavior is not implemented.
+### Modules/utils
+**Status: Implemented**
 
-**Missing**
-- Full comparison service that integrates repository-backed product/price retrieval and ranking end-to-end.
+Implemented:
+- Text normalization and validation helpers are isolated and used by parsing/validation flows.
 
-### `Modules/app`
+## Consolidated separation verdict
 
-**Responsibility**
-- Thin use-case orchestration for loading, basket item persistence, comparison invocation, and chain listing.
+**Overall verdict: Partial**.
 
-**Implemented**
-- `ApplicationService` facade.
-- `LoadPricesUseCase`, `AddBasketItemUseCase`, `CompareBasketUseCase`, `ListChainsUseCase` using protocol-based collaborators.
+Clean separations are present for:
+- engine vs file parsing,
+- app vs SQL/parsing,
+- models/utils vs infrastructure.
 
-**Partial**
-- Comparison and chain listing rely on collaborator contracts that are not fully backed by implemented DB repositories/services.
+A clear, evidence-backed boundary violation remains:
+- data layer currently contains direct persistence/query SQL that should reside in DB repositories.
 
-**Missing**
-- Basket management use cases beyond add/compare/list (update/remove/clear/current-state retrieval).
-
-### `Modules/models`
-
-**Responsibility**
-- Domain entities and output/result contracts shared across layers.
-
-**Implemented**
-- Entities: `Product`, `Chain`, `Store`, `Price`, `BasketItem`.
-- Results/enums: `BasketLineResult`, `ChainComparisonResult`, `BasketComparisonResult`, `MatchStatus`, `AvailabilityStatus`.
-
-**Partial**
-- Validation is present, but no additional shared constants module currently exists.
-
-### `Modules/utils`
-
-**Responsibility**
-- Focused reusable helpers for text normalization and basic validation.
-
-**Implemented**
-- Text normalization helpers (`normalize_whitespace`, `normalize_text`, `normalize_product_name`).
-- Validators for barcode, quantity, price, and required text.
-
-**Missing**
-- No additional utility categories are needed for current MVP; avoid broadening this layer.
-
-## Anti-patterns to avoid
-
-- Putting comparison/ranking logic inside `Modules/db` or `Modules/data`.
-- Parsing files directly in `Modules/engine`.
-- Writing raw SQL in `Modules/app` when repository abstractions exist.
-- Treating planned/future behavior as implemented in docs.
-- Moving shared business rules into `Modules/utils` to bypass engine boundaries.
-
-## Evidence baseline (code + tests)
-
-- Current implemented behavior is evidenced by:
-  - unit tests for app/data/db/engine/models/utils
-  - integration tests for import flow and comparison result building
-- Gaps listed above remain documented as partial/missing until matching code and tests exist.
+No broad refactor is included in this audit update.

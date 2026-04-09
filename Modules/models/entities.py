@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -108,6 +108,7 @@ class BasketItem:
     input_type: str
     quantity: int
     match_status: str
+    candidate_product_ids: list[int] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.input_value = _strip_text(self.input_value, "input_value")
@@ -119,3 +120,15 @@ class BasketItem:
 
         if self.quantity <= 0:
             raise ValueError("quantity must be a positive integer")
+
+        if not isinstance(self.candidate_product_ids, list):
+            raise TypeError("candidate_product_ids must be a list")
+
+        normalized_candidate_ids: list[int] = []
+        for candidate_id in self.candidate_product_ids:
+            if not isinstance(candidate_id, int) or isinstance(candidate_id, bool):
+                raise TypeError("candidate_product_ids must contain integers")
+            if candidate_id <= 0:
+                raise ValueError("candidate_product_ids must contain positive integers")
+            normalized_candidate_ids.append(candidate_id)
+        self.candidate_product_ids = normalized_candidate_ids

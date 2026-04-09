@@ -306,7 +306,8 @@ class TestGetBasketStateUseCase(unittest.TestCase):
                 input_value="unknown",
                 input_type="name",
                 quantity=1,
-                match_status="unmatched",
+                match_status="ambiguous",
+                candidate_product_ids=[99, 100],
             ),
         ]
         use_case = GetBasketStateUseCase(basket_repository=repository)
@@ -316,7 +317,9 @@ class TestGetBasketStateUseCase(unittest.TestCase):
         self.assertEqual(result["basket_id"], 100)
         self.assertEqual(result["item_count"], 2)
         self.assertEqual(result["items"][0]["id"], 1)
-        self.assertEqual(result["items"][1]["match_status"], "unmatched")
+        self.assertEqual(result["items"][1]["match_status"], "ambiguous")
+        self.assertEqual(result["items"][0]["candidate_product_ids"], [])
+        self.assertEqual(result["items"][1]["candidate_product_ids"], [99, 100])
 
 
 if __name__ == "__main__":

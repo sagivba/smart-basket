@@ -331,7 +331,8 @@ class TestBasketRepository(unittest.TestCase):
                 input_value TEXT NOT NULL,
                 input_type TEXT NOT NULL,
                 quantity INTEGER NOT NULL,
-                match_status TEXT NOT NULL
+                match_status TEXT NOT NULL,
+                candidate_product_ids TEXT NOT NULL DEFAULT '[]'
             )
             """
         )
@@ -375,6 +376,7 @@ class TestBasketRepository(unittest.TestCase):
         self.assertIsNotNone(saved.id)
         self.assertEqual(saved.basket_id, 100)
         self.assertEqual(saved.product_id, 11)
+        self.assertEqual(saved.candidate_product_ids, [])
 
         persisted_rows = self.connection.execute(
             "SELECT COUNT(*) FROM basket_items WHERE basket_id = ?", (100,)
@@ -444,20 +446,47 @@ class TestBasketRepository(unittest.TestCase):
             input_type="barcode",
             quantity=3,
             match_status="matched",
+            candidate_product_ids=[71, 72],
         )
 
         self.repository.update_item(updated)
 
         row = self.connection.execute(
             """
-            SELECT basket_id, product_id, input_value, input_type, quantity, match_status
+            SELECT
+                basket_id,
+                product_id,
+                input_value,
+                input_type,
+                quantity,
+                match_status,
+                candidate_product_ids
             FROM basket_items
             WHERE id = ?
             """,
             (created.id,),
         ).fetchone()
 
-        self.assertEqual(row, (301, 22, "new milk", "barcode", 3, "matched"))
+        self.assertEqual(row, (301, 22, "new milk", "barcode", 3, "matched", "[71, 72]"))
+
+    def test_add_item_persists_ambiguous_candidate_product_ids(self) -> None:
+        saved = self.repository.add_item(
+            BasketItem(
+                id=None,
+                basket_id=302,
+                product_id=None,
+                input_value="milk",
+                input_type="name",
+                quantity=1,
+                match_status="ambiguous",
+                candidate_product_ids=[81, 82],
+            )
+        )
+
+        self.assertEqual(saved.candidate_product_ids, [81, 82])
+        reloaded = self.repository.get_by_basket_id(302)
+        self.assertEqual(len(reloaded), 1)
+        self.assertEqual(reloaded[0].candidate_product_ids, [81, 82])
 
 
     def test_update_item_raises_when_identifier_missing(self) -> None:

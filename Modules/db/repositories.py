@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date
 from decimal import Decimal
@@ -541,8 +542,9 @@ class BasketRepository:
                 input_value,
                 input_type,
                 quantity,
-                match_status
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                match_status,
+                candidate_product_ids
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 item.basket_id,
@@ -551,6 +553,7 @@ class BasketRepository:
                 item.input_type,
                 item.quantity,
                 item.match_status,
+                json.dumps(item.candidate_product_ids),
             ),
         )
         self._connection.commit()
@@ -563,13 +566,22 @@ class BasketRepository:
             input_type=item.input_type,
             quantity=item.quantity,
             match_status=item.match_status,
+            candidate_product_ids=list(item.candidate_product_ids),
         )
 
     def get_by_basket_id(self, basket_id: int) -> list[BasketItem]:
         """Return all items that belong to the requested basket identifier."""
         rows = self._connection.execute(
             """
-            SELECT id, basket_id, product_id, input_value, input_type, quantity, match_status
+            SELECT
+                id,
+                basket_id,
+                product_id,
+                input_value,
+                input_type,
+                quantity,
+                match_status,
+                candidate_product_ids
             FROM basket_items
             WHERE basket_id = ?
             ORDER BY id
@@ -591,7 +603,8 @@ class BasketRepository:
                 input_value = ?,
                 input_type = ?,
                 quantity = ?,
-                match_status = ?
+                match_status = ?,
+                candidate_product_ids = ?
             WHERE id = ?
             """,
             (
@@ -601,6 +614,7 @@ class BasketRepository:
                 item.input_type,
                 item.quantity,
                 item.match_status,
+                json.dumps(item.candidate_product_ids),
                 item.id,
             ),
         )
@@ -631,4 +645,20 @@ class BasketRepository:
             input_type=row[4],
             quantity=row[5],
             match_status=row[6],
+            candidate_product_ids=BasketRepository._parse_candidate_product_ids(row[7]),
         )
+
+    @staticmethod
+    def _parse_candidate_product_ids(raw_value: object) -> list[int]:
+        """Parse candidate_product_ids JSON into a validated integer list."""
+        if raw_value is None:
+            return []
+        parsed = json.loads(str(raw_value))
+        if not isinstance(parsed, list):
+            raise ValueError("candidate_product_ids must be stored as a JSON array")
+        parsed_ids: list[int] = []
+        for candidate_id in parsed:
+            if not isinstance(candidate_id, int) or isinstance(candidate_id, bool):
+                raise ValueError("candidate_product_ids must be stored as integer values")
+            parsed_ids.append(candidate_id)
+        return parsed_ids

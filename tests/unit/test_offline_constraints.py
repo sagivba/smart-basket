@@ -65,7 +65,7 @@ class TestOfflineExecutionConstraints(unittest.TestCase):
             ),
         )
 
-    def test_requirements_file_has_no_runtime_dependencies(self) -> None:
+    def test_requirements_file_has_expected_runtime_dependencies(self) -> None:
         requirements_lines = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
         pinned_dependencies = [
             line.strip()
@@ -74,9 +74,12 @@ class TestOfflineExecutionConstraints(unittest.TestCase):
         ]
 
         self.assertEqual(
-            [],
+            ["il-supermarket-scraper==1.0.0"],
             pinned_dependencies,
-            msg="requirements.txt must stay empty of third-party runtime/test dependencies for MVP.",
+            msg=(
+                "requirements.txt should keep a minimal explicit dependency set for MVP. "
+                "Unexpected dependency changes require review."
+            ),
         )
 
 

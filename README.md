@@ -108,7 +108,7 @@ source .venv/bin/activate
 
 ### 3) Install dependencies
 
-No third-party runtime/test dependencies are required at this stage.
+This repository keeps dependencies minimal. It currently includes `il-supermarket-scraper` for the optional raw transparency-file downloader integration.
 
 ```bash
 python -m pip install -r requirements.txt
@@ -159,3 +159,17 @@ To keep documentation accurate, this README does **not** claim:
 - completed end-to-end comparison-service orchestration beyond what tests currently verify,
 - any backend/API/web runtime,
 - any non-local execution dependency.
+
+
+## Third-party attribution
+
+This repository includes an **optional** raw-download integration that depends on:
+
+- `il-supermarket-scraper` from OpenIsraeliSupermarkets / `israeli-supermarket-scarpers`
+- OpenIsraeliSupermarkets / `israeli-supermarket-parsers`
+
+The current integration uses the scraper package to download raw supermarket transparency files for selected chains into local folders. Parsing/loading downloaded XML/GZ files into this project's SQLite schema is a **separate step** and is not part of the downloader capability itself.
+
+### Licensing note (third-party dependency)
+
+The upstream OpenIsraeliSupermarkets packages referenced above are distributed under a custom non-commercial license model with attribution requirements. This project does not vendor that source code; it only integrates via external package dependency, and users should review upstream license terms before commercial use.

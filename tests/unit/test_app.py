@@ -10,6 +10,7 @@ from Modules.app.application_service import (
     ApplicationService,
     ClearBasketUseCase,
     CompareBasketUseCase,
+    DownloadTransparencyFilesUseCase,
     GetBasketStateUseCase,
     ListChainsUseCase,
     LoadPricesUseCase,
@@ -118,6 +119,7 @@ class TestApplicationService(unittest.TestCase):
         add_basket_item_use_case = Mock()
         compare_basket_use_case = Mock()
         list_chains_use_case = Mock()
+        download_transparency_use_case = Mock()
         update_quantity_use_case = Mock()
         remove_basket_item_use_case = Mock()
         clear_basket_use_case = Mock()
@@ -128,6 +130,7 @@ class TestApplicationService(unittest.TestCase):
             add_basket_item_use_case=add_basket_item_use_case,
             compare_basket_use_case=compare_basket_use_case,
             list_chains_use_case=list_chains_use_case,
+            download_transparency_files_use_case=download_transparency_use_case,
             update_basket_item_quantity_use_case=update_quantity_use_case,
             remove_basket_item_use_case=remove_basket_item_use_case,
             clear_basket_use_case=clear_basket_use_case,
@@ -171,6 +174,7 @@ class TestApplicationService(unittest.TestCase):
         add_basket_item_use_case.execute.return_value = saved_item
         compare_basket_use_case.execute.return_value = compare_result
         list_chains_use_case.execute.return_value = chains_result
+        download_transparency_use_case.execute.return_value = {"success": True}
         update_quantity_use_case.execute.return_value = updated_item
         clear_basket_use_case.execute.return_value = 1
         get_basket_state_use_case.execute.return_value = basket_state
@@ -179,6 +183,10 @@ class TestApplicationService(unittest.TestCase):
         self.assertEqual(service.add_basket_item(input_item), saved_item)
         self.assertEqual(service.compare_basket(88), compare_result)
         self.assertEqual(service.list_chains(), chains_result)
+        self.assertEqual(
+            service.download_transparency_files(target_root="data/raw/downloads", limit=2),
+            {"success": True},
+        )
         self.assertEqual(service.update_basket_item_quantity(88, 42, 4), updated_item)
         self.assertEqual(service.clear_basket(88), 1)
         self.assertEqual(service.get_basket_state(88), basket_state)
@@ -188,6 +196,13 @@ class TestApplicationService(unittest.TestCase):
         add_basket_item_use_case.execute.assert_called_once_with(input_item)
         compare_basket_use_case.execute.assert_called_once_with(88)
         list_chains_use_case.execute.assert_called_once_with()
+        download_transparency_use_case.execute.assert_called_once_with(
+            target_root="data/raw/downloads",
+            when_date=None,
+            limit=2,
+            include_store_files=True,
+            prefer_full_price_files=True,
+        )
         update_quantity_use_case.execute.assert_called_once_with(
             basket_id=88,
             item_id=42,
@@ -199,6 +214,33 @@ class TestApplicationService(unittest.TestCase):
         )
         clear_basket_use_case.execute.assert_called_once_with(basket_id=88)
         get_basket_state_use_case.execute.assert_called_once_with(basket_id=88)
+
+
+class TestDownloadTransparencyFilesUseCase(unittest.TestCase):
+    def test_execute_delegates_to_downloader(self) -> None:
+        downloader = Mock()
+        expected = {"success": True, "downloaded_files": 3}
+        downloader.download_files.return_value = expected
+
+        use_case = DownloadTransparencyFilesUseCase(downloader=downloader)
+
+        result = use_case.execute(
+            target_root="data/raw/downloads",
+            when_date=None,
+            limit=3,
+            include_store_files=True,
+            prefer_full_price_files=True,
+        )
+
+        self.assertEqual(result, expected)
+        downloader.download_files.assert_called_once_with(
+            target_root="data/raw/downloads",
+            when_date=None,
+            limit=3,
+            include_store_files=True,
+            prefer_full_price_files=True,
+        )
+
 
 
 class TestUpdateBasketItemQuantityUseCase(unittest.TestCase):

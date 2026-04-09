@@ -96,6 +96,46 @@ class ListChainsUseCase:
         return self.chain_repository.list_chains()
 
 
+
+
+class TransparencyDownloaderProtocol(Protocol):
+    """Protocol for raw transparency-file download collaborator."""
+
+    def download_files(
+        self,
+        target_root: str | Any,
+        when_date: Any = None,
+        limit: int | None = None,
+        include_store_files: bool = True,
+        prefer_full_price_files: bool = True,
+    ) -> Any:
+        """Download raw transparency files for supported chains."""
+
+
+@dataclass(slots=True)
+class DownloadTransparencyFilesUseCase:
+    """Application use case that orchestrates remote raw-file downloads."""
+
+    downloader: TransparencyDownloaderProtocol
+
+    def execute(
+        self,
+        target_root: str | Any = "data/raw/downloads",
+        when_date: Any = None,
+        limit: int | None = None,
+        include_store_files: bool = True,
+        prefer_full_price_files: bool = True,
+    ) -> Any:
+        """Run the remote download workflow via the data-layer downloader."""
+        return self.downloader.download_files(
+            target_root=target_root,
+            when_date=when_date,
+            limit=limit,
+            include_store_files=include_store_files,
+            prefer_full_price_files=prefer_full_price_files,
+        )
+
+
 @dataclass(slots=True)
 class UpdateBasketItemQuantityUseCase:
     """Application use case that orchestrates quantity updates."""
@@ -185,6 +225,7 @@ class ApplicationService:
     add_basket_item_use_case: AddBasketItemUseCase
     compare_basket_use_case: CompareBasketUseCase
     list_chains_use_case: ListChainsUseCase
+    download_transparency_files_use_case: DownloadTransparencyFilesUseCase
     update_basket_item_quantity_use_case: UpdateBasketItemQuantityUseCase
     remove_basket_item_use_case: RemoveBasketItemUseCase
     clear_basket_use_case: ClearBasketUseCase
@@ -205,6 +246,23 @@ class ApplicationService:
     def list_chains(self) -> list[Any]:
         """Execute the list-chains use case."""
         return self.list_chains_use_case.execute()
+
+    def download_transparency_files(
+        self,
+        target_root: str | Any = "data/raw/downloads",
+        when_date: Any = None,
+        limit: int | None = None,
+        include_store_files: bool = True,
+        prefer_full_price_files: bool = True,
+    ) -> Any:
+        """Execute the remote transparency-files download use case."""
+        return self.download_transparency_files_use_case.execute(
+            target_root=target_root,
+            when_date=when_date,
+            limit=limit,
+            include_store_files=include_store_files,
+            prefer_full_price_files=prefer_full_price_files,
+        )
 
     def update_basket_item_quantity(
         self, basket_id: int, item_id: int, quantity: int

@@ -19,8 +19,8 @@
 - [x] Add unit tests for result model behavior
 
 ## 4. Text utilities and validators
-- [ ] Implement text normalization helpers
-- [ ] Implement product name normalization helpers
+- [x] Implement text normalization helpers
+- [x] Implement product name normalization helpers
 - [ ] Implement barcode, quantity, price, and required-field validation
 - [ ] Add unit tests for utilities and validators
 
@@ -31,11 +31,11 @@
 - [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
-- [ ] Implement product upsert
-- [ ] Implement lookup by barcode
-- [ ] Implement lookup by normalized name
-- [ ] Implement retrieval by product IDs
-- [ ] Add repository unit tests
+- [x] Implement product upsert
+- [x] Implement lookup by barcode
+- [x] Implement lookup by normalized name
+- [x] Implement retrieval by product IDs
+- [x] Add repository unit tests
 
 ## 7. ChainRepository and StoreRepository
 - [ ] Implement chain upsert and lookup operations

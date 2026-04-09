@@ -1,11 +1,13 @@
-"""Basket comparison result building logic for the engine layer."""
+"""Basket comparison result building and comparison orchestration for the engine layer."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from numbers import Real
-from typing import Any
+from typing import Any, Protocol
 
+from Modules.models.entities import BasketItem
 from Modules.models.results import (
     AvailabilityStatus,
     BasketComparisonResult,
@@ -248,3 +250,165 @@ class BasketEngine:
             raise ValueError("unit_price must not be negative")
 
         return normalized_unit_price
+
+
+class ChainReadProtocol(Protocol):
+    """Read model for chain metadata needed by comparison service."""
+
+    def list_chains(self) -> Sequence[Mapping[str, Any]]:
+        """Return chain rows with at least id and name."""
+
+
+class ProductReadProtocol(Protocol):
+    """Read model for product metadata needed by comparison service."""
+
+    def get_products_by_ids(self, product_ids: Sequence[int]) -> Sequence[Mapping[str, Any]]:
+        """Return product rows keyed by identifiers."""
+
+
+class PriceReadProtocol(Protocol):
+    """Read model for representative chain prices used by comparison service."""
+
+    def get_prices_for_products_by_chain(
+        self, product_ids: Sequence[int]
+    ) -> Sequence[Mapping[str, Any]]:
+        """Return rows containing chain_id, product_id and unit price."""
+
+
+@dataclass(slots=True)
+class BasketCalculator:
+    """Calculator that builds per-chain comparison outputs from matched basket lines."""
+
+    engine: BasketEngine
+
+    def calculate_chain(
+        self,
+        *,
+        chain: Mapping[str, Any],
+        matched_items: Sequence[Mapping[str, Any]],
+        unit_prices_by_product_id: Mapping[int, float],
+    ) -> ChainComparisonResult:
+        """Calculate one chain comparison result from matched items and prices."""
+        calculation_lines = [
+            {
+                "product_id": item["product_id"],
+                "product_name": item["product_name"],
+                "barcode": item.get("barcode"),
+                "quantity": item["quantity"],
+                "unit_price": unit_prices_by_product_id.get(item["product_id"]),
+            }
+            for item in matched_items
+        ]
+
+        return self.engine.build_chain_result(
+            chain_id=int(chain["id"]),
+            chain_name=str(chain["name"]),
+            basket_items=calculation_lines,
+        )
+
+
+@dataclass(slots=True)
+class BasketComparisonService:
+    """Service that orchestrates basket comparison, calculation and deterministic ranking."""
+
+    chain_repository: ChainReadProtocol
+    product_repository: ProductReadProtocol
+    price_repository: PriceReadProtocol
+    calculator: BasketCalculator
+
+    def compare_basket(self, basket_items: Sequence[BasketItem]) -> BasketComparisonResult:
+        """Compare one basket across chains and return ranked structured results."""
+        unmatched_items = [
+            item.input_value
+            for item in basket_items
+            if item.product_id is None or item.match_status == MatchStatus.UNMATCHED.value
+        ]
+
+        matched_items = [item for item in basket_items if item.product_id is not None]
+        if not matched_items:
+            return BasketComparisonResult(ranked_chains=[], unmatched_items=unmatched_items)
+
+        product_ids = self._collect_ordered_product_ids(matched_items)
+        products_by_id = {
+            int(product["id"]): product
+            for product in self.product_repository.get_products_by_ids(product_ids)
+        }
+
+        normalized_matched_items: list[dict[str, Any]] = []
+        for item in matched_items:
+            product = products_by_id.get(int(item.product_id))
+            if product is None:
+                unmatched_items.append(item.input_value)
+                continue
+
+            normalized_matched_items.append(
+                {
+                    "product_id": int(item.product_id),
+                    "product_name": str(product.get("name", item.input_value)),
+                    "barcode": product.get("barcode"),
+                    "quantity": int(item.quantity),
+                }
+            )
+
+        if not normalized_matched_items:
+            return BasketComparisonResult(ranked_chains=[], unmatched_items=unmatched_items)
+
+        prices_by_chain = self._index_prices_by_chain(
+            self.price_repository.get_prices_for_products_by_chain(product_ids)
+        )
+
+        chain_results = [
+            self.calculator.calculate_chain(
+                chain=chain,
+                matched_items=normalized_matched_items,
+                unit_prices_by_product_id=prices_by_chain.get(int(chain["id"]), {}),
+            )
+            for chain in self.chain_repository.list_chains()
+        ]
+
+        return BasketComparisonResult(
+            ranked_chains=self.rank_chains(chain_results),
+            unmatched_items=unmatched_items,
+        )
+
+    def rank_chains(
+        self, chain_results: Sequence[ChainComparisonResult]
+    ) -> list[ChainComparisonResult]:
+        """Rank complete baskets first, then by price, then deterministic chain identity."""
+        return sorted(
+            chain_results,
+            key=lambda chain: (
+                not chain.is_complete_basket,
+                chain.total_price,
+                chain.chain_id,
+                chain.chain_name,
+            ),
+        )
+
+    def _collect_ordered_product_ids(self, basket_items: Sequence[BasketItem]) -> list[int]:
+        product_ids: list[int] = []
+        seen: set[int] = set()
+
+        for item in basket_items:
+            if item.product_id is None:
+                continue
+            if item.product_id not in seen:
+                seen.add(item.product_id)
+                product_ids.append(item.product_id)
+
+        return product_ids
+
+    def _index_prices_by_chain(
+        self, price_rows: Sequence[Mapping[str, Any]]
+    ) -> dict[int, dict[int, float]]:
+        prices_by_chain: dict[int, dict[int, float]] = {}
+
+        for row in price_rows:
+            chain_id = int(row["chain_id"])
+            product_id = int(row["product_id"])
+            unit_price = float(row["price"])
+
+            chain_prices = prices_by_chain.setdefault(chain_id, {})
+            chain_prices[product_id] = unit_price
+
+        return prices_by_chain

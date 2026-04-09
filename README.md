@@ -62,3 +62,27 @@ python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
 If you want to match CI expectations exactly, run this with Python 3.12.
+
+## Basic CLI (local MVP consumer)
+
+Run the CLI with Python module execution:
+
+```bash
+python -m Modules.app.cli --help
+```
+
+Examples:
+
+```bash
+# load local files
+python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite load products tests/fixtures/parser/products_valid.csv
+python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite load stores <stores_file.csv>
+python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite load prices <prices_file.csv>
+
+# add basket items
+python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite add-item 1 7290012345678 --input-type barcode --quantity 2
+python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite add-item 1 "milk 1l" --input-type name --quantity 1
+
+# compare basket
+python -m Modules.app.cli --db-path data/generated/smart_basket.sqlite compare 1
+```

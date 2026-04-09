@@ -129,11 +129,11 @@
 - [x] Add unit tests
 
 ## 20. Basic CLI
-- [ ] Create a basic CLI entry point
-- [ ] Add commands for data loading, basket item addition, and basket comparison
-- [ ] Implement text output for comparison results, missing items, and unmatched items
-- [ ] Implement user-friendly error messages
-- [ ] Add CLI-level tests if applicable
+- [x] Create a basic CLI entry point
+- [x] Add commands for data loading, basket item addition, and basket comparison
+- [x] Implement text output for comparison results, missing items, and unmatched items
+- [x] Implement user-friendly error messages
+- [x] Add CLI-level tests if applicable
 
 ## 21. Unit tests by module
 - [x] Complete `test_models.py`

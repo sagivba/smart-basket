@@ -78,17 +78,17 @@
 - [x] Add loader unit tests
 
 ## 13. Barcode-based product matching
-- [ ] Implement direct product matching by barcode *(partial: matching methods are implemented in engine, but dedicated matching unit tests are still missing)*
-- [ ] Mark unknown barcode items as unmatched *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Return a consistent matching result structure *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Add matching unit tests
+- [x] Implement direct product matching by barcode *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Mark unknown barcode items as unmatched *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Return a consistent matching result structure *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Add matching unit tests
 
 ## 14. Name-based product matching
-- [ ] Implement normalized-name product matching *(partial: matching methods are implemented in engine, but dedicated matching unit tests are still missing)*
-- [ ] Return a single match for unambiguous results *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Return candidate lists for ambiguous matches *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Mark unknown names as unmatched *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Add matching unit tests
+- [x] Implement normalized-name product matching *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Return a single match for unambiguous results *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Return candidate lists for ambiguous matches *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Mark unknown names as unmatched *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Add matching unit tests
 
 ## 15. Basket calculation
 - [x] Implement basket item validation before calculation

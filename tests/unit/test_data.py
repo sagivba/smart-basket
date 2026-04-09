@@ -1,19 +1,23 @@
-"""Unit tests for parser core infrastructure."""
+"""Unit tests for parser core infrastructure and MVP concrete parsing."""
 
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
 
 from Modules.data.parser import (
     FileFormat,
     FileParser,
+    MalformedFileContentError,
     ParsedPriceRecord,
     ParsedProductRecord,
     ParsingError,
     ParsingErrorCollection,
     ParsingSummary,
     UnsupportedFileFormatError,
+    parse_prices_file,
+    parse_products_file,
 )
 
 
@@ -104,6 +108,105 @@ class TestParsingSummaryAndErrors(unittest.TestCase):
         self.assertFalse(collection.is_empty())
         self.assertEqual(collection.count, 1)
         self.assertEqual(collection.errors[0], error)
+
+
+class TestProductAndPriceFileParsing(unittest.TestCase):
+    def _write_temp_file(self, suffix: str, content: str) -> str:
+        with tempfile.NamedTemporaryFile("w", suffix=suffix, encoding="utf-8", delete=False) as handle:
+            handle.write(content)
+            return handle.name
+
+    def test_parse_products_file_csv_success_with_normalization(self) -> None:
+        file_path = self._write_temp_file(
+            ".csv",
+            "barcode,product_name,brand,unit_name\n"
+            "7290012345678,  Milk   1L  ,  DairyCo  , 1L \n",
+        )
+
+        records, summary, errors = parse_products_file(file_path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].barcode, "7290012345678")
+        self.assertEqual(records[0].product_name, "Milk 1L")
+        self.assertEqual(records[0].normalized_name, "milk 1l")
+        self.assertEqual(records[0].brand, "DairyCo")
+        self.assertEqual(records[0].unit_name, "1L")
+        self.assertEqual(summary.accepted_rows, 1)
+        self.assertEqual(summary.rejected_rows, 0)
+        self.assertTrue(errors.is_empty())
+
+    def test_parse_prices_file_json_success(self) -> None:
+        file_path = self._write_temp_file(
+            ".json",
+            "["
+            '{"chain_code": "CH01", "store_code": "ST10", "barcode": "7290012345678", '
+            '"price": "12.50", "currency": "ILS", "price_date": "2026-04-09"}'
+            "]",
+        )
+
+        records, summary, errors = parse_prices_file(file_path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].chain_code, "CH01")
+        self.assertEqual(records[0].store_code, "ST10")
+        self.assertEqual(records[0].barcode, "7290012345678")
+        self.assertEqual(records[0].price_text, "12.50")
+        self.assertEqual(records[0].currency, "ILS")
+        self.assertEqual(records[0].price_date_text, "2026-04-09")
+        self.assertEqual(summary.accepted_rows, 1)
+        self.assertEqual(summary.rejected_rows, 0)
+        self.assertTrue(errors.is_empty())
+
+    def test_parse_products_file_tracks_invalid_row(self) -> None:
+        file_path = self._write_temp_file(
+            ".csv",
+            "barcode,product_name\n"
+            "not-a-barcode,Milk\n",
+        )
+
+        records, summary, errors = parse_products_file(file_path)
+
+        self.assertEqual(records, [])
+        self.assertEqual(summary.accepted_rows, 0)
+        self.assertEqual(summary.rejected_rows, 1)
+        self.assertEqual(errors.count, 1)
+        self.assertEqual(errors.errors[0].row_number, 2)
+        self.assertEqual(errors.errors[0].field_name, "barcode")
+
+    def test_parse_prices_file_tracks_invalid_row(self) -> None:
+        file_path = self._write_temp_file(
+            ".json",
+            "["
+            '{"chain_code": "CH01", "store_code": "", "barcode": "7290012345678", '
+            '"price": "11.90", "currency": "ILS", "price_date": "2026-04-09"}'
+            "]",
+        )
+
+        records, summary, errors = parse_prices_file(file_path)
+
+        self.assertEqual(records, [])
+        self.assertEqual(summary.accepted_rows, 0)
+        self.assertEqual(summary.rejected_rows, 1)
+        self.assertEqual(errors.count, 1)
+        self.assertEqual(errors.errors[0].field_name, "store_code")
+
+    def test_parse_products_file_raises_for_malformed_json_content(self) -> None:
+        file_path = self._write_temp_file(".json", "not-json")
+
+        with self.assertRaisesRegex(MalformedFileContentError, "malformed JSON content"):
+            parse_products_file(file_path)
+
+    def test_parse_prices_file_raises_for_malformed_content(self) -> None:
+        file_path = self._write_temp_file(".csv", "")
+
+        with self.assertRaisesRegex(MalformedFileContentError, "header row"):
+            parse_prices_file(file_path)
+
+    def test_parse_products_file_unsupported_format(self) -> None:
+        file_path = self._write_temp_file(".xml", "<products></products>")
+
+        with self.assertRaisesRegex(UnsupportedFileFormatError, "unsupported file format"):
+            parse_products_file(file_path)
 
 
 if __name__ == "__main__":

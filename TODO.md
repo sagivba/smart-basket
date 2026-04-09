@@ -64,11 +64,11 @@
 - [x] Add parser infrastructure unit tests
 
 ## 11. Product, store, and price file parsing
-- [ ] Implement `parse_products_file()`
-- [ ] Implement `parse_prices_file()`
+- [x] Implement `parse_products_file()`
+- [x] Implement `parse_prices_file()`
 - [ ] Implement `parse_stores_file()`
-- [ ] Implement row normalization and invalid row handling
-- [ ] Add parsing unit tests with deterministic fixtures
+- [x] Implement row normalization and invalid row handling *(for product/price parsing flows)*
+- [x] Add parsing unit tests with deterministic fixtures
 
 ## 12. Data loader orchestration
 - [ ] Implement `LoadJob` and `LoadResult`
@@ -139,7 +139,7 @@
 - [x] Complete `test_models.py`
 - [x] Complete `test_utils.py` *(text utility coverage added)*
 - [x] Complete `test_db.py` *(BasketRepository coverage added)*
-- [x] Complete `test_data.py` *(parser infrastructure coverage added)*
+- [x] Complete `test_data.py` *(parser infrastructure + product/price parsing coverage added)*
 - [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_app.py` *(partial: file exists, currently empty)*
 - [ ] Ensure all new behavior is covered with `unittest` only

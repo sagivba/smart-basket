@@ -1,70 +1,96 @@
-"""Basket engine matching logic for the MVP."""
+"""Basket calculation engine for matched products."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Protocol, Sequence
+from decimal import Decimal
+from typing import Iterable, Protocol
 
-from Modules.models.entities import Product
-from Modules.models.results import MatchStatus
-from Modules.utils.validators import validate_barcode
-
-
-class ProductLookupRepository(Protocol):
-    """Repository contract required for barcode-based product lookup."""
-
-    def get_by_barcode(self, barcode: str) -> Product | None:
-        """Return a product for the given barcode when it exists."""
+from Modules.models.entities import BasketItem
 
 
-@dataclass(slots=True)
-class BarcodeMatchItem:
-    """A single matched barcode input and its resolved product."""
+class PriceRepositoryProtocol(Protocol):
+    """Protocol for the price lookup dependency used by the basket calculator."""
 
-    input_barcode: str
-    product_id: int
-    product_barcode: str
-    product_name: str
-    match_status: MatchStatus = MatchStatus.MATCHED
+    def get_prices_for_products_by_chain(
+        self, product_ids: list[int]
+    ) -> dict[int, dict[int, Decimal]]:
+        """Return prices by chain and product identifier."""
 
 
 @dataclass(slots=True)
-class BarcodeMatchResult:
-    """Deterministic barcode matching output for MVP basket inputs."""
+class ChainCostSummary:
+    """Calculated basket cost summary for a single chain."""
 
-    matched_items: list[BarcodeMatchItem] = field(default_factory=list)
-    unmatched_items: list[str] = field(default_factory=list)
+    chain_id: int
+    line_prices: dict[int, Decimal] = field(default_factory=dict)
+    total_price: Decimal = Decimal("0")
+    found_items_count: int = 0
 
 
-class BasketEngine:
-    """Engine service for direct product matching behavior."""
+class BasketCalculator:
+    """Calculates matched-item basket costs across chains."""
 
-    def __init__(self, product_repository: ProductLookupRepository) -> None:
-        self._product_repository = product_repository
+    def __init__(self, price_repository: PriceRepositoryProtocol) -> None:
+        self._price_repository = price_repository
 
-    def match_by_barcodes(self, barcodes: Sequence[str]) -> BarcodeMatchResult:
-        """Match barcode inputs directly through repository lookup only."""
-        result = BarcodeMatchResult()
+    def calculate_for_matched_products(
+        self, basket_items: Iterable[BasketItem]
+    ) -> dict[int, ChainCostSummary]:
+        """Validate items and calculate chain costs for matched products only."""
+        items = list(basket_items)
+        self._validate_basket_items(items)
 
-        for barcode_input in barcodes:
-            barcode = validate_barcode(barcode_input)
-            product = self._product_repository.get_by_barcode(barcode)
+        matched_quantities = self._collect_matched_product_quantities(items)
+        if not matched_quantities:
+            return {}
 
-            if product is None:
-                result.unmatched_items.append(barcode)
+        product_ids = list(matched_quantities)
+        prices_by_chain = self._price_repository.get_prices_for_products_by_chain(product_ids)
+
+        return self._calculate_chain_costs(matched_quantities, prices_by_chain)
+
+    @staticmethod
+    def _validate_basket_items(basket_items: Iterable[BasketItem]) -> None:
+        for item in basket_items:
+            if not isinstance(item.quantity, int) or item.quantity <= 0:
+                raise ValueError("quantity must be a positive integer")
+
+    @staticmethod
+    def _collect_matched_product_quantities(
+        basket_items: Iterable[BasketItem],
+    ) -> dict[int, int]:
+        matched_quantities: dict[int, int] = {}
+        for item in basket_items:
+            if item.match_status != "matched" or item.product_id is None:
                 continue
 
-            product_id = product.id
-            if product_id is None:
-                raise ValueError("matched product must include product id")
-
-            result.matched_items.append(
-                BarcodeMatchItem(
-                    input_barcode=barcode,
-                    product_id=product_id,
-                    product_barcode=product.barcode,
-                    product_name=product.name,
-                )
+            matched_quantities[item.product_id] = (
+                matched_quantities.get(item.product_id, 0) + item.quantity
             )
 
-        return result
+        return matched_quantities
+
+    @staticmethod
+    def _calculate_chain_costs(
+        matched_quantities: dict[int, int],
+        prices_by_chain: dict[int, dict[int, Decimal]],
+    ) -> dict[int, ChainCostSummary]:
+        chain_summaries: dict[int, ChainCostSummary] = {}
+
+        for chain_id, chain_product_prices in prices_by_chain.items():
+            summary = ChainCostSummary(chain_id=chain_id)
+
+            for product_id, quantity in matched_quantities.items():
+                unit_price = chain_product_prices.get(product_id)
+                if unit_price is None:
+                    continue
+
+                line_price = unit_price * quantity
+                summary.line_prices[product_id] = line_price
+                summary.total_price += line_price
+                summary.found_items_count += 1
+
+            chain_summaries[chain_id] = summary
+
+        return chain_summaries

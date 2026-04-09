@@ -1,81 +1,131 @@
-"""Unit tests for barcode matching behavior in the basket engine."""
+"""Unit tests for basket engine calculations."""
 
 from __future__ import annotations
 
 import unittest
+from decimal import Decimal
 
-from Modules.engine.basket_engine import BarcodeMatchItem, BarcodeMatchResult, BasketEngine
-from Modules.models.entities import Product
-from Modules.models.results import MatchStatus
-
-
-class InMemoryProductLookupRepository:
-    """Deterministic in-memory product lookup by barcode for tests."""
-
-    def __init__(self, products_by_barcode: dict[str, Product]) -> None:
-        self._products_by_barcode = products_by_barcode
-
-    def get_by_barcode(self, barcode: str) -> Product | None:
-        return self._products_by_barcode.get(barcode)
+from Modules.engine.basket_engine import BasketCalculator
+from Modules.models.entities import BasketItem
 
 
-class TestBasketEngineBarcodeMatching(unittest.TestCase):
-    def test_match_by_barcodes_matches_known_barcode(self) -> None:
-        known_product = Product(
-            id=101,
-            barcode="7290012345678",
-            name="Milk 1L",
-            normalized_name="milk 1l",
-            brand="DairyCo",
-            unit_name="1L",
-        )
-        engine = BasketEngine(
-            InMemoryProductLookupRepository({known_product.barcode: known_product})
-        )
+class FakePriceRepository:
+    """In-memory fake repository for basket engine unit tests."""
 
-        result = engine.match_by_barcodes(["7290012345678"])
+    def __init__(self, prices_by_chain: dict[int, dict[int, Decimal]]) -> None:
+        self.prices_by_chain = prices_by_chain
+        self.last_product_ids: list[int] = []
 
-        self.assertEqual(len(result.matched_items), 1)
-        self.assertEqual(result.unmatched_items, [])
-        self.assertEqual(result.matched_items[0].product_id, 101)
-        self.assertEqual(result.matched_items[0].product_name, "Milk 1L")
-        self.assertEqual(result.matched_items[0].match_status, MatchStatus.MATCHED)
+    def get_prices_for_products_by_chain(
+        self, product_ids: list[int]
+    ) -> dict[int, dict[int, Decimal]]:
+        self.last_product_ids = list(product_ids)
+        return {
+            chain_id: {
+                product_id: unit_price
+                for product_id, unit_price in chain_prices.items()
+                if product_id in set(product_ids)
+            }
+            for chain_id, chain_prices in self.prices_by_chain.items()
+        }
 
-    def test_match_by_barcodes_returns_unmatched_for_unknown_barcode(self) -> None:
-        engine = BasketEngine(InMemoryProductLookupRepository({}))
 
-        result = engine.match_by_barcodes(["7290099999999"])
-
-        self.assertEqual(result.matched_items, [])
-        self.assertEqual(result.unmatched_items, ["7290099999999"])
-
-    def test_match_by_barcodes_returns_consistent_result_structure(self) -> None:
-        known_product = Product(
-            id=201,
-            barcode="7290011111111",
-            name="Bread",
-            normalized_name="bread",
-            brand=None,
-            unit_name=None,
-        )
-        engine = BasketEngine(
-            InMemoryProductLookupRepository({known_product.barcode: known_product})
+class TestBasketCalculator(unittest.TestCase):
+    def _make_item(
+        self,
+        *,
+        product_id: int | None,
+        quantity: int,
+        match_status: str,
+        input_value: str = "input",
+        input_type: str = "name",
+    ) -> BasketItem:
+        return BasketItem(
+            id=None,
+            basket_id=1,
+            product_id=product_id,
+            input_value=input_value,
+            input_type=input_type,
+            quantity=quantity,
+            match_status=match_status,
         )
 
-        result = engine.match_by_barcodes(["7290011111111", "7290022222222"])
+    def test_valid_basket_calculation_uses_only_matched_products(self) -> None:
+        fake_repository = FakePriceRepository(
+            prices_by_chain={
+                1: {101: Decimal("5.00"), 102: Decimal("3.50")},
+                2: {101: Decimal("4.75")},
+            }
+        )
+        calculator = BasketCalculator(fake_repository)
+        basket_items = [
+            self._make_item(product_id=101, quantity=2, match_status="matched"),
+            self._make_item(product_id=102, quantity=1, match_status="matched"),
+            self._make_item(product_id=None, quantity=4, match_status="unmatched"),
+        ]
 
-        self.assertIsInstance(result, BarcodeMatchResult)
-        self.assertIsInstance(result.matched_items, list)
-        self.assertIsInstance(result.unmatched_items, list)
+        result = calculator.calculate_for_matched_products(basket_items)
 
-        matched_item = result.matched_items[0]
-        self.assertIsInstance(matched_item, BarcodeMatchItem)
-        self.assertEqual(matched_item.input_barcode, "7290011111111")
-        self.assertEqual(matched_item.product_barcode, "7290011111111")
-        self.assertEqual(matched_item.product_name, "Bread")
-        self.assertEqual(matched_item.match_status, MatchStatus.MATCHED)
+        self.assertEqual(set(fake_repository.last_product_ids), {101, 102})
+        self.assertEqual(result[1].line_prices[101], Decimal("10.00"))
+        self.assertEqual(result[1].line_prices[102], Decimal("3.50"))
+        self.assertEqual(result[2].line_prices[101], Decimal("9.50"))
+        self.assertNotIn(102, result[2].line_prices)
 
-        self.assertEqual(result.unmatched_items, ["7290022222222"])
+    def test_quantity_validation_failure_raises_value_error(self) -> None:
+        fake_repository = FakePriceRepository(prices_by_chain={1: {101: Decimal("2.00")}})
+        calculator = BasketCalculator(fake_repository)
+        invalid_item = self._make_item(product_id=101, quantity=1, match_status="matched")
+        invalid_item.quantity = 0
+
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            calculator.calculate_for_matched_products([invalid_item])
+
+    def test_line_price_equals_unit_price_times_quantity(self) -> None:
+        fake_repository = FakePriceRepository(prices_by_chain={1: {101: Decimal("2.35")}})
+        calculator = BasketCalculator(fake_repository)
+
+        result = calculator.calculate_for_matched_products(
+            [self._make_item(product_id=101, quantity=3, match_status="matched")]
+        )
+
+        self.assertEqual(result[1].line_prices[101], Decimal("7.05"))
+
+    def test_total_chain_cost_is_sum_of_found_line_prices(self) -> None:
+        fake_repository = FakePriceRepository(
+            prices_by_chain={1: {101: Decimal("2.00"), 102: Decimal("3.50")}}
+        )
+        calculator = BasketCalculator(fake_repository)
+
+        result = calculator.calculate_for_matched_products(
+            [
+                self._make_item(product_id=101, quantity=2, match_status="matched"),
+                self._make_item(product_id=102, quantity=1, match_status="matched"),
+                self._make_item(product_id=103, quantity=5, match_status="matched"),
+            ]
+        )
+
+        self.assertEqual(result[1].total_price, Decimal("7.50"))
+
+    def test_found_item_count_reflects_products_with_available_price_data(self) -> None:
+        fake_repository = FakePriceRepository(
+            prices_by_chain={
+                1: {101: Decimal("2.00")},
+                2: {102: Decimal("3.00"), 103: Decimal("1.00")},
+            }
+        )
+        calculator = BasketCalculator(fake_repository)
+
+        result = calculator.calculate_for_matched_products(
+            [
+                self._make_item(product_id=101, quantity=1, match_status="matched"),
+                self._make_item(product_id=102, quantity=1, match_status="matched"),
+                self._make_item(product_id=103, quantity=1, match_status="matched"),
+            ]
+        )
+
+        self.assertEqual(result[1].found_items_count, 1)
+        self.assertEqual(result[2].found_items_count, 2)
 
 
 if __name__ == "__main__":

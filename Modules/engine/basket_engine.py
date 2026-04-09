@@ -11,11 +11,80 @@ from Modules.models.results import (
     BasketComparisonResult,
     BasketLineResult,
     ChainComparisonResult,
+    MatchStatus,
 )
 
 
 class BasketEngine:
     """Builds structured basket comparison results for chains."""
+
+    def match_input_item_by_barcode(
+        self,
+        *,
+        barcode: str,
+        quantity: int,
+        products_by_barcode: Mapping[str, Mapping[str, Any]],
+    ) -> dict[str, Any]:
+        """Match one barcode input item and return a stable match structure."""
+        normalized_barcode = str(barcode).strip()
+        if not normalized_barcode:
+            raise ValueError("barcode is required")
+
+        if not isinstance(quantity, int) or quantity <= 0:
+            raise ValueError("quantity must be a positive integer")
+
+        product = products_by_barcode.get(normalized_barcode)
+        if product is None:
+            return {
+                "input_type": "barcode",
+                "input_value": normalized_barcode,
+                "quantity": quantity,
+                "match_status": MatchStatus.UNMATCHED.value,
+                "product_id": None,
+                "product_name": None,
+                "barcode": normalized_barcode,
+            }
+
+        return {
+            "input_type": "barcode",
+            "input_value": normalized_barcode,
+            "quantity": quantity,
+            "match_status": MatchStatus.MATCHED.value,
+            "product_id": product.get("id"),
+            "product_name": product.get("name"),
+            "barcode": product.get("barcode", normalized_barcode),
+        }
+
+    def match_basket_items_by_barcode(
+        self,
+        *,
+        basket_items: Sequence[Mapping[str, Any]],
+        products: Sequence[Mapping[str, Any]],
+    ) -> dict[str, list[Any]]:
+        """Match basket inputs by exact barcode and collect unmatched barcode values."""
+        products_by_barcode = {
+            str(product["barcode"]).strip(): product
+            for product in products
+            if product.get("barcode") is not None
+        }
+
+        matched_items: list[dict[str, Any]] = []
+        unmatched_items: list[str] = []
+
+        for basket_item in basket_items:
+            match_result = self.match_input_item_by_barcode(
+                barcode=str(basket_item["input_value"]),
+                quantity=int(basket_item["quantity"]),
+                products_by_barcode=products_by_barcode,
+            )
+            matched_items.append(match_result)
+            if match_result["match_status"] == MatchStatus.UNMATCHED.value:
+                unmatched_items.append(match_result["input_value"])
+
+        return {
+            "matched_items": matched_items,
+            "unmatched_items": unmatched_items,
+        }
 
     def build_chain_result(
         self,

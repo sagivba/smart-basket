@@ -214,5 +214,73 @@ class TestBasketEngineResultBuilding(unittest.TestCase):
             )
 
 
+class TestBasketEngineBarcodeMatching(unittest.TestCase):
+    def setUp(self) -> None:
+        self.engine = BasketEngine()
+
+    def test_match_input_item_by_barcode_returns_direct_product_match(self) -> None:
+        result = self.engine.match_input_item_by_barcode(
+            barcode=" 7290012345678 ",
+            quantity=2,
+            products_by_barcode={
+                "7290012345678": {
+                    "id": 101,
+                    "barcode": "7290012345678",
+                    "name": "Milk 1L",
+                }
+            },
+        )
+
+        self.assertEqual(result["input_type"], "barcode")
+        self.assertEqual(result["input_value"], "7290012345678")
+        self.assertEqual(result["quantity"], 2)
+        self.assertEqual(result["match_status"], "matched")
+        self.assertEqual(result["product_id"], 101)
+        self.assertEqual(result["product_name"], "Milk 1L")
+        self.assertEqual(result["barcode"], "7290012345678")
+
+    def test_match_input_item_by_barcode_marks_unknown_barcode_as_unmatched(self) -> None:
+        result = self.engine.match_input_item_by_barcode(
+            barcode="0000000000000",
+            quantity=1,
+            products_by_barcode={},
+        )
+
+        self.assertEqual(result["match_status"], "unmatched")
+        self.assertIsNone(result["product_id"])
+        self.assertIsNone(result["product_name"])
+        self.assertEqual(result["barcode"], "0000000000000")
+
+    def test_match_basket_items_by_barcode_returns_consistent_structure(self) -> None:
+        match_output = self.engine.match_basket_items_by_barcode(
+            basket_items=[
+                {"input_value": "111", "quantity": 1},
+                {"input_value": "999", "quantity": 2},
+            ],
+            products=[
+                {"id": 1, "barcode": "111", "name": "Bread"},
+                {"id": 2, "barcode": "222", "name": "Milk"},
+            ],
+        )
+
+        self.assertEqual(match_output["unmatched_items"], ["999"])
+        self.assertEqual(len(match_output["matched_items"]), 2)
+
+        first_keys = set(match_output["matched_items"][0].keys())
+        second_keys = set(match_output["matched_items"][1].keys())
+        self.assertEqual(first_keys, second_keys)
+        self.assertEqual(
+            first_keys,
+            {
+                "input_type",
+                "input_value",
+                "quantity",
+                "match_status",
+                "product_id",
+                "product_name",
+                "barcode",
+            },
+        )
+
 if __name__ == "__main__":
     unittest.main()

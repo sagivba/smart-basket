@@ -3,10 +3,144 @@
 from __future__ import annotations
 
 import sqlite3
+import tempfile
 import unittest
+from pathlib import Path
 
+from Modules.db.database import ConnectionFactory, DatabaseManager, create_schema
 from Modules.db.repositories import BasketRepository
 from Modules.models.entities import BasketItem
+
+
+class TestConnectionFactoryAndSchema(unittest.TestCase):
+    def test_create_connection_returns_sqlite_connection(self) -> None:
+        connection = ConnectionFactory.create_connection(":memory:")
+        try:
+            self.assertIsInstance(connection, sqlite3.Connection)
+        finally:
+            connection.close()
+
+    def test_create_connection_enables_foreign_keys(self) -> None:
+        connection = ConnectionFactory.create_connection(":memory:")
+        try:
+            pragma_value = connection.execute("PRAGMA foreign_keys;").fetchone()
+            self.assertEqual(pragma_value[0], 1)
+        finally:
+            connection.close()
+
+    def test_create_schema_succeeds_and_is_idempotent(self) -> None:
+        connection = ConnectionFactory.create_connection(":memory:")
+        try:
+            create_schema(connection)
+            create_schema(connection)
+        finally:
+            connection.close()
+
+    def test_create_schema_creates_expected_core_tables(self) -> None:
+        connection = ConnectionFactory.create_connection(":memory:")
+        try:
+            create_schema(connection)
+            rows = connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'table'
+                ORDER BY name
+                """
+            ).fetchall()
+            table_names = {row[0] for row in rows}
+            self.assertTrue(
+                {"products", "chains", "stores", "prices", "basket_items"}.issubset(
+                    table_names
+                )
+            )
+        finally:
+            connection.close()
+
+    def test_create_schema_creates_expected_indexes(self) -> None:
+        connection = ConnectionFactory.create_connection(":memory:")
+        try:
+            create_schema(connection)
+            rows = connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type = 'index'
+                ORDER BY name
+                """
+            ).fetchall()
+            index_names = {row[0] for row in rows}
+            expected_indexes = {
+                "idx_products_normalized_name",
+                "idx_stores_chain_id",
+                "idx_prices_product_chain",
+                "idx_prices_store_id",
+                "idx_basket_items_basket_id",
+                "idx_basket_items_product_id",
+            }
+            self.assertTrue(expected_indexes.issubset(index_names))
+        finally:
+            connection.close()
+
+
+class TestDatabaseManager(unittest.TestCase):
+    def test_get_connection_uses_configured_database_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_path = Path(temp_dir) / "manager.db"
+            manager = DatabaseManager(database_path)
+
+            connection = manager.get_connection()
+            try:
+                self.assertEqual(
+                    connection.execute("PRAGMA database_list;").fetchone()[2],
+                    str(database_path),
+                )
+                pragma_value = connection.execute("PRAGMA foreign_keys;").fetchone()
+                self.assertEqual(pragma_value[0], 1)
+            finally:
+                connection.close()
+
+    def test_initialize_database_creates_schema_objects(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_path = Path(temp_dir) / "init.db"
+            manager = DatabaseManager(database_path)
+
+            manager.initialize_database()
+
+            with sqlite3.connect(str(database_path)) as connection:
+                rows = connection.execute(
+                    """
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type = 'table'
+                    ORDER BY name
+                    """
+                ).fetchall()
+                table_names = {row[0] for row in rows}
+                self.assertTrue(
+                    {"products", "chains", "stores", "prices", "basket_items"}.issubset(
+                        table_names
+                    )
+                )
+
+    def test_initialize_database_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            database_path = Path(temp_dir) / "idempotent.db"
+            manager = DatabaseManager(database_path)
+
+            manager.initialize_database()
+            manager.initialize_database()
+
+            with sqlite3.connect(str(database_path)) as connection:
+                count = connection.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM sqlite_master
+                    WHERE type = 'table'
+                      AND name IN ('products', 'chains', 'stores', 'prices', 'basket_items')
+                    """
+                ).fetchone()[0]
+                self.assertEqual(count, 5)
 
 
 class TestBasketRepository(unittest.TestCase):

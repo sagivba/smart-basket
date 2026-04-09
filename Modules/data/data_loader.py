@@ -246,7 +246,8 @@ class PriceDataLoader:
         if isinstance(raw_output, tuple):
             if len(raw_output) == 3:
                 records, summary, parse_errors = raw_output
-                return list(records), summary, list(parse_errors)
+                normalized_errors = getattr(parse_errors, "errors", parse_errors)
+                return list(records), summary, list(normalized_errors)
             if len(raw_output) == 2:
                 records, summary = raw_output
                 return list(records), summary, []

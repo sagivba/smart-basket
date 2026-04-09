@@ -1,0 +1,3 @@
+chain_code,store_code,barcode,price,currency,price_date
+CHAIN_A,STORE_1,12345678,5.90,ILS,2026-01-15
+CHAIN_A,STORE_1,87654321,7.50,ILS,2026-01-15

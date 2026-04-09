@@ -163,7 +163,7 @@
 - [ ] Update `module_guide.md` with layer boundaries and dependencies
 - [x] Update `test_strategy.md` with testing patterns and execution guidance
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
-- [ ] Verify Python 3.12 compatibility *(partial: CI is configured for Python 3.12, but compatibility is not documented/explicitly verified in-project)*
+- [x] Document Python 3.12 compatibility expectation and verification trail *(README + test-strategy now document CI target, local test command, and evidence boundaries without over-claiming runtime guarantees)*
 - [ ] Verify the system runs fully offline
 - [ ] Verify responsibilities remain cleanly separated across layers
 

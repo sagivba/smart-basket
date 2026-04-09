@@ -258,6 +258,40 @@ Do not use:
 
 ## 9. Failure Policy
 
+## 9.1 Python 3.12 and Offline Verification Trail
+
+### 9.1.1 Python 3.12 expectation
+
+Python 3.12 is the declared project target.
+Verification evidence currently available in-repo:
+
+- documentation baseline references Python 3.12 as the intended stack
+- GitHub Actions unit-test workflow is pinned to Python 3.12 (`.github/workflows/unit-tests.yml`)
+
+Scope note: this confirms the repository target and CI lane configuration.
+It does not guarantee that every local machine is already using Python 3.12; that remains an environment requirement for contributors.
+
+### 9.1.2 Offline/local-only execution assumption
+
+Offline capability is a design constraint for MVP validation:
+
+- tests must run without network access
+- module responsibilities exclude remote integrations
+- persistence is local SQLite
+- fixtures and test data are deterministic and local
+
+Verification should remain evidence-based: use imports, workflows, and test commands to confirm no network dependency is required by current tests, and avoid claiming production-hardening guarantees beyond repository scope.
+
+### 9.1.3 Minimum verification checklist for documentation updates
+
+When updating compatibility/offline statements, verify and record:
+
+1. CI workflow Python target version (`.github/workflows/unit-tests.yml`)
+2. test command used for project validation
+3. whether repository code/tests include network-dependent imports or execution requirements
+4. whether any new dependency changes offline assumptions
+
+
 When a defect is found:
 1. add a failing test that reproduces the problem
 2. implement the fix

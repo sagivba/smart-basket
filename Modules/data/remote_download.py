@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from datetime import date, datetime
 import importlib
 from pathlib import Path
@@ -30,6 +31,25 @@ class ChainDownloadRequest:
     limit: int | None = None
 
 
+class AttemptStatus(str, Enum):
+    """Status values for deterministic per-attempt reporting."""
+
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+
+
+@dataclass(slots=True)
+class FailureDetail:
+    """Structured failure detail that preserves root-cause information."""
+
+    chain_name: str
+    file_type: str
+    exception_class_name: str
+    exception_message: str
+    normalized_reason: str
+
+
 @dataclass(slots=True)
 class FileDownloadAttempt:
     """Result of attempting to download one file category for one chain."""
@@ -39,9 +59,15 @@ class FileDownloadAttempt:
     target_directory: Path
     expected_file_name: str | None
     discovered_file_name: str | None
-    success: bool
+    status: AttemptStatus
     failure_reason: str | None
+    failure_detail: FailureDetail | None = None
     downloaded_file_paths: list[Path] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def success(self) -> bool:
+        return self.status == AttemptStatus.SUCCESS
 
 
 @dataclass(slots=True)
@@ -69,6 +95,7 @@ class DownloadBatchResult:
     total_files_downloaded: int = 0
     total_successful_attempts: int = 0
     total_failed_attempts: int = 0
+    total_skipped_attempts: int = 0
     success: bool = False
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -93,14 +120,28 @@ class RetailChainsDownloadManager:
             package_api = self._load_package_api()
         except Exception as exc:
             finished_at = datetime.utcnow()
+            normalized_reason = self._normalize_failure_reason(exc)
+            resolved_requested_chains = list(chains or SUPPORTED_CHAIN_ORDER)
+            chain_results = [
+                self._build_chain_init_failure_result(
+                    chain_name=chain_name,
+                    file_types=list(file_types or DEFAULT_FILE_TYPE_ORDER),
+                    target_directory=self._default_chain_target(resolved_root, chain_name),
+                    exc=exc,
+                    normalized_reason=normalized_reason,
+                )
+                for chain_name in resolved_requested_chains
+            ]
             return DownloadBatchResult(
-                requested_chains=list(chains or SUPPORTED_CHAIN_ORDER),
+                requested_chains=resolved_requested_chains,
                 root_target_directory=resolved_root,
                 started_at=started_at,
                 finished_at=finished_at,
-                total_failed_attempts=1,
+                chain_results=chain_results,
+                total_failed_attempts=len(chain_results),
+                total_skipped_attempts=sum(len(c.requested_file_types) for c in chain_results),
                 success=False,
-                errors=[f"failed to load il-supermarket-scraper API: {exc}"],
+                errors=[f"failed to load il-supermarket-scraper API: {normalized_reason}"],
             )
 
         resolved_chains = self._resolve_requested_chains(package_api=package_api, requested_chains=chains)
@@ -132,13 +173,19 @@ class RetailChainsDownloadManager:
             1
             for chain_result in chain_results
             for attempt in chain_result.attempts
-            if attempt.success
+            if attempt.status == AttemptStatus.SUCCESS
         )
         total_failed_attempts = sum(
             1
             for chain_result in chain_results
             for attempt in chain_result.attempts
-            if not attempt.success
+            if attempt.status == AttemptStatus.FAILED
+        )
+        total_skipped_attempts = sum(
+            1
+            for chain_result in chain_results
+            for attempt in chain_result.attempts
+            if attempt.status == AttemptStatus.SKIPPED
         )
         total_files_downloaded = sum(len(chain_result.downloaded_files) for chain_result in chain_results)
 
@@ -151,6 +198,7 @@ class RetailChainsDownloadManager:
             total_files_downloaded=total_files_downloaded,
             total_successful_attempts=total_successful_attempts,
             total_failed_attempts=total_failed_attempts,
+            total_skipped_attempts=total_skipped_attempts,
             success=(total_failed_attempts == 0 and not batch_errors),
             warnings=batch_warnings,
             errors=batch_errors,
@@ -164,24 +212,27 @@ class RetailChainsDownloadManager:
             f"chains={','.join(batch_result.requested_chains)}",
             f"attempts_success={batch_result.total_successful_attempts}",
             f"attempts_failed={batch_result.total_failed_attempts}",
+            f"attempts_skipped={batch_result.total_skipped_attempts}",
             f"files_downloaded={batch_result.total_files_downloaded}",
             f"overall_success={batch_result.success}",
         ]
 
         for chain_result in batch_result.chain_results:
-            lines.append(f"[{chain_result.chain_name}] success={chain_result.success}")
+            lines.append("")
+            lines.append(f"Chain: {chain_result.chain_name}")
             for attempt in chain_result.attempts:
-                status = "SUCCESS" if attempt.success else "FAILED"
-                if attempt.success:
-                    path_text = ", ".join(str(path) for path in attempt.downloaded_file_paths)
-                    lines.append(
-                        f"{attempt.chain_name} | {attempt.file_type} | {status} | {path_text}"
-                    )
+                line = f"- {attempt.file_type}: {attempt.status.value}"
+                if attempt.status == AttemptStatus.SUCCESS:
+                    path_text = ", ".join(str(path) for path in attempt.downloaded_file_paths) or "none"
+                    line += f" | paths={path_text}"
                 else:
                     reason = attempt.failure_reason or "unknown failure"
-                    lines.append(
-                        f"{attempt.chain_name} | {attempt.file_type} | {status} | {reason}"
-                    )
+                    line += f" | reason={reason}"
+                if attempt.warnings:
+                    line += f" | warnings={'; '.join(attempt.warnings)}"
+                lines.append(line)
+            for warning in chain_result.warnings:
+                lines.append(f"- WARNING: {warning}")
         return "\n".join(lines)
 
     @staticmethod
@@ -239,12 +290,21 @@ class RetailChainsDownloadManager:
         package_api: dict[str, Any],
         request: ChainDownloadRequest,
     ) -> ChainDownloadResult:
-        request.target_directory.mkdir(parents=True, exist_ok=True)
-
         attempts: list[FileDownloadAttempt] = []
         downloaded_files: list[Path] = []
         warnings: list[str] = []
         errors: list[str] = []
+
+        try:
+            request.target_directory.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            return self._build_chain_init_failure_result(
+                chain_name=request.chain_name,
+                file_types=request.file_types,
+                target_directory=request.target_directory,
+                exc=exc,
+                normalized_reason=self._normalize_failure_reason(exc),
+            )
 
         for file_type in request.file_types:
             before_files = self._list_files(request.target_directory)
@@ -271,8 +331,15 @@ class RetailChainsDownloadManager:
                             target_directory=request.target_directory,
                             expected_file_name=None,
                             discovered_file_name=None,
-                            success=False,
+                            status=AttemptStatus.FAILED,
                             failure_reason=failure_reason,
+                            failure_detail=FailureDetail(
+                                chain_name=request.chain_name,
+                                file_type=file_type,
+                                exception_class_name="NoFilesReturned",
+                                exception_message=failure_reason,
+                                normalized_reason=failure_reason,
+                            ),
                         )
                     )
                     errors.append(f"{request.chain_name} {file_type}: {failure_reason}")
@@ -286,13 +353,13 @@ class RetailChainsDownloadManager:
                         target_directory=request.target_directory,
                         expected_file_name=None,
                         discovered_file_name=new_files[0].name,
-                        success=True,
+                        status=AttemptStatus.SUCCESS,
                         failure_reason=None,
                         downloaded_file_paths=list(new_files),
                     )
                 )
             except Exception as exc:  # pragma: no cover - exercised via unit tests
-                reason = str(exc)
+                reason = self._normalize_failure_reason(exc)
                 attempts.append(
                     FileDownloadAttempt(
                         chain_name=request.chain_name,
@@ -300,8 +367,15 @@ class RetailChainsDownloadManager:
                         target_directory=request.target_directory,
                         expected_file_name=None,
                         discovered_file_name=None,
-                        success=False,
+                        status=AttemptStatus.FAILED,
                         failure_reason=reason,
+                        failure_detail=FailureDetail(
+                            chain_name=request.chain_name,
+                            file_type=file_type,
+                            exception_class_name=exc.__class__.__name__,
+                            exception_message=str(exc),
+                            normalized_reason=reason,
+                        ),
                     )
                 )
                 errors.append(f"{request.chain_name} {file_type}: {reason}")
@@ -311,13 +385,70 @@ class RetailChainsDownloadManager:
 
         return ChainDownloadResult(
             chain_name=request.chain_name,
-            success=all(attempt.success for attempt in attempts) if attempts else False,
+            success=all(attempt.status == AttemptStatus.SUCCESS for attempt in attempts if attempt.file_type in request.file_types) if attempts else False,
             requested_file_types=list(request.file_types),
             attempts=attempts,
             downloaded_files=sorted(downloaded_files),
             warnings=warnings,
             errors=errors,
         )
+
+    def _build_chain_init_failure_result(
+        self,
+        *,
+        chain_name: str,
+        file_types: list[str],
+        target_directory: Path,
+        exc: Exception,
+        normalized_reason: str,
+    ) -> ChainDownloadResult:
+        attempts = [
+            FileDownloadAttempt(
+                chain_name=chain_name,
+                file_type="CHAIN_INIT",
+                target_directory=target_directory,
+                expected_file_name=None,
+                discovered_file_name=None,
+                status=AttemptStatus.FAILED,
+                failure_reason=normalized_reason,
+                failure_detail=FailureDetail(
+                    chain_name=chain_name,
+                    file_type="CHAIN_INIT",
+                    exception_class_name=exc.__class__.__name__,
+                    exception_message=str(exc),
+                    normalized_reason=normalized_reason,
+                ),
+            )
+        ]
+        attempts.extend(
+            FileDownloadAttempt(
+                chain_name=chain_name,
+                file_type=file_type,
+                target_directory=target_directory,
+                expected_file_name=None,
+                discovered_file_name=None,
+                status=AttemptStatus.SKIPPED,
+                failure_reason=f"chain initialization failed: {normalized_reason}",
+            )
+            for file_type in file_types
+        )
+        return ChainDownloadResult(
+            chain_name=chain_name,
+            success=False,
+            requested_file_types=list(file_types),
+            attempts=attempts,
+            downloaded_files=[],
+            warnings=[f"{chain_name}: no files downloaded"],
+            errors=[f"{chain_name} CHAIN_INIT: {normalized_reason}"],
+        )
+
+    @staticmethod
+    def _normalize_failure_reason(exc: Exception) -> str:
+        message = str(exc).strip()
+        exception_class = exc.__class__.__name__
+        if message:
+            return f"{exception_class.lower()}: {message}"
+        return exception_class.lower()
 
     @staticmethod
     def _default_chain_target(target_root: Path, chain_name: str) -> Path:

@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from Modules.data.remote_download import (
+    AttemptStatus,
     DownloadBatchResult,
     RetailChainsDownloadManager,
     download_all_supported_chains,
@@ -35,6 +36,12 @@ class _FakeScarpingTask:
         base = Path(self.kwargs["output_configuration"]["base_storage_path"])
         file_name = f"{chain_name}_{file_type}.xml"
         (base / file_name).write_text("ok", encoding="utf-8")
+
+
+class _ExplodingPath:
+    def mkdir(self, parents=True, exist_ok=True):
+        _ = (parents, exist_ok)
+        raise RuntimeError("missing dependency: il_supermarket_scarper")
 
 
 def _patch_imports(behavior: dict[tuple[str, str], str]):
@@ -94,11 +101,16 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
 
         self.assertFalse(result.success)
         self.assertEqual(result.total_failed_attempts, 2)
+        self.assertEqual(result.total_skipped_attempts, 0)
         attempts = result.chain_results[0].attempts
         failed = [attempt for attempt in attempts if not attempt.success]
         self.assertEqual(len(failed), 2)
         self.assertTrue(any("no files returned by upstream scraper" in (a.failure_reason or "") for a in failed))
         self.assertTrue(any("upstream timeout" in (a.failure_reason or "") for a in failed))
+        self.assertTrue(all(a.failure_detail is not None for a in failed))
+        timeout_attempt = next(a for a in failed if "upstream timeout" in (a.failure_reason or ""))
+        self.assertEqual(timeout_attempt.failure_detail.exception_class_name, "RuntimeError")
+        self.assertEqual(timeout_attempt.failure_detail.exception_message, "upstream timeout")
 
     def test_total_failure_flow_for_one_chain(self) -> None:
         manager = RetailChainsDownloadManager()
@@ -118,6 +130,7 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
         self.assertEqual(result.total_successful_attempts, 0)
         self.assertEqual(result.total_failed_attempts, 5)
         self.assertTrue(chain_result.warnings)
+        self.assertTrue(all(a.status == AttemptStatus.FAILED for a in chain_result.attempts))
 
     def test_report_rendering_content(self) -> None:
         manager = RetailChainsDownloadManager()
@@ -127,9 +140,49 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
             report = manager.render_report(result)
 
         self.assertIn("Download batch summary", report)
-        self.assertIn("HAZI_HINAM | PROMO_FULL_FILE | FAILED", report)
-        self.assertIn("no files returned by upstream scraper", report)
-        self.assertIn("HAZI_HINAM | STORE_FILE | SUCCESS", report)
+        self.assertIn("Chain: HAZI_HINAM", report)
+        self.assertIn("- PROMO_FULL_FILE: FAILED | reason=no files returned by upstream scraper", report)
+        self.assertIn("- STORE_FILE: SUCCESS | paths=", report)
+
+    def test_render_report_two_chains_partial_failure_with_separate_reasons(self) -> None:
+        manager = RetailChainsDownloadManager()
+        behavior = {
+            ("SHUFERSAL", "PRICE_FILE"): "error:timeout while downloading",
+            ("HAZI_HINAM", "STORE_FILE"): "empty",
+        }
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports(behavior):
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL", "HAZI_HINAM"],
+                file_types=["STORE_FILE", "PRICE_FILE"],
+            )
+            report = manager.render_report(result)
+
+        self.assertEqual(result.total_successful_attempts, 2)
+        self.assertEqual(result.total_failed_attempts, 2)
+        self.assertIn("Chain: SHUFERSAL", report)
+        self.assertIn("- PRICE_FILE: FAILED | reason=runtimeerror: timeout while downloading", report)
+        self.assertIn("Chain: HAZI_HINAM", report)
+        self.assertIn("- STORE_FILE: FAILED | reason=no files returned by upstream scraper", report)
+
+    def test_chain_init_exception_is_rendered_and_file_types_marked_skipped(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.object(manager, "_default_chain_target", return_value=_ExplodingPath()):
+                with _patch_imports({}):
+                    result = manager.download_chains(
+                        target_root=temp_dir,
+                        chains=["SHUFERSAL"],
+                        file_types=["STORE_FILE", "PRICE_FILE"],
+                    )
+                    report = manager.render_report(result)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.total_failed_attempts, 1)
+        self.assertEqual(result.total_skipped_attempts, 2)
+        self.assertIn("- CHAIN_INIT: FAILED | reason=runtimeerror: missing dependency: il_supermarket_scarper", report)
+        self.assertIn("- STORE_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: missing dependency: il_supermarket_scarper", report)
+        self.assertIn("- PRICE_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: missing dependency: il_supermarket_scarper", report)
 
     def test_deterministic_folder_layout(self) -> None:
         manager = RetailChainsDownloadManager()

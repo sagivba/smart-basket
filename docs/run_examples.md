@@ -27,6 +27,33 @@ print(manager.render_report(result))
 PY
 ```
 
+Example rendered output (failure reasons visible per chain and file type):
+
+```text
+Download batch summary
+root=data/raw/downloads
+chains=SHUFERSAL,HAZI_HINAM
+attempts_success=0
+attempts_failed=6
+attempts_skipped=4
+files_downloaded=0
+overall_success=False
+
+Chain: SHUFERSAL
+- STORE_FILE: FAILED | reason=runtimeerror: timeout
+- PRICE_FILE: FAILED | reason=runtimeerror: timeout
+- PRICE_FULL_FILE: FAILED | reason=runtimeerror: timeout
+- PROMO_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: timeout
+- PROMO_FULL_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: timeout
+
+Chain: HAZI_HINAM
+- STORE_FILE: FAILED | reason=runtimeerror: network error
+- PRICE_FILE: FAILED | reason=runtimeerror: network error
+- PRICE_FULL_FILE: FAILED | reason=runtimeerror: network error
+- PROMO_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: network error
+- PROMO_FULL_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: network error
+```
+
 ### 1.3 Download raw files for Shufersal only
 
 ```bash

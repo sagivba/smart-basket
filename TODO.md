@@ -25,10 +25,10 @@
 - [ ] Add unit tests for utilities and validators
 
 ## 5. SQLite connection manager and schema creation
-- [ ] Implement `ConnectionFactory` and `DatabaseManager`
-- [ ] Implement schema creation for `products`, `chains`, `stores`, `prices`, and `basket_items`
-- [ ] Create required foreign keys and indexes
-- [ ] Add unit tests for schema creation and DB initialization
+- [x] Implement `ConnectionFactory` and `DatabaseManager`
+- [x] Implement schema creation for `products`, `chains`, `stores`, `prices`, and `basket_items`
+- [x] Create required foreign keys and indexes
+- [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
 - [x] Implement product upsert
@@ -137,8 +137,8 @@
 
 ## 21. Unit tests by module
 - [x] Complete `test_models.py`
-- [x] Complete `test_utils.py` *(text utility coverage added)*
-- [ ] Complete `test_db.py` *(partial: file exists, currently empty)*
+- [ ] Complete `test_utils.py` *(partial: file exists, currently empty)*
+- [x] Complete `test_db.py` *(SQLite connection and schema tests added)*
 - [ ] Complete `test_data.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_app.py` *(partial: file exists, currently empty)*

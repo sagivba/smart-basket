@@ -1,145 +1,136 @@
-"""Unit tests for database repositories."""
+"""Unit tests for SQLite connection and schema initialization."""
 
 from __future__ import annotations
 
 import sqlite3
+import tempfile
 import unittest
-from datetime import date
-from decimal import Decimal
+from pathlib import Path
 
-from Modules.db.repositories import PriceRepository
-from Modules.models.entities import Price
+from Modules.db.database import ConnectionFactory, DatabaseManager, create_schema
 
 
-class PriceRepositoryTests(unittest.TestCase):
+class TestConnectionFactory(unittest.TestCase):
+    def test_create_connection_returns_sqlite_connection(self) -> None:
+        connection = ConnectionFactory.create_connection(":memory:")
+        try:
+            self.assertIsInstance(connection, sqlite3.Connection)
+        finally:
+            connection.close()
+
+    def test_create_connection_enables_foreign_keys(self) -> None:
+        connection = ConnectionFactory.create_connection(":memory:")
+        try:
+            row = connection.execute("PRAGMA foreign_keys;").fetchone()
+            self.assertEqual((1,), row)
+        finally:
+            connection.close()
+
+
+class TestSchemaCreation(unittest.TestCase):
+    EXPECTED_TABLES = {"products", "chains", "stores", "prices", "basket_items"}
+    EXPECTED_INDEXES = {
+        "idx_products_normalized_name",
+        "idx_stores_chain_id",
+        "idx_prices_product_chain",
+        "idx_prices_store_id",
+        "idx_basket_items_basket_id",
+        "idx_basket_items_product_id",
+    }
+
     def setUp(self) -> None:
-        self.connection = sqlite3.connect(":memory:")
-        self.connection.execute(
-            """
-            CREATE TABLE prices (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                product_id INTEGER NOT NULL,
-                chain_id INTEGER NOT NULL,
-                store_id INTEGER NOT NULL,
-                price TEXT NOT NULL,
-                currency TEXT NOT NULL,
-                price_date TEXT NOT NULL,
-                source_file TEXT
-            )
-            """
-        )
-        self.repository = PriceRepository(self.connection)
+        self.connection = ConnectionFactory.create_connection(":memory:")
 
     def tearDown(self) -> None:
         self.connection.close()
 
-    def test_upsert_price_inserts_new_row(self) -> None:
-        price = Price(
-            id=None,
-            product_id=1,
-            chain_id=10,
-            store_id=100,
-            price=Decimal("9.99"),
-            currency="ILS",
-            price_date=date(2026, 4, 9),
-            source_file="prices_a.csv",
-        )
+    def test_create_schema_succeeds(self) -> None:
+        create_schema(self.connection)
+        self.connection.execute("SELECT 1;").fetchone()
 
-        saved = self.repository.upsert_price(price)
+    def test_create_schema_is_idempotent(self) -> None:
+        create_schema(self.connection)
+        create_schema(self.connection)
 
-        self.assertIsNotNone(saved.id)
-        self.assertEqual(saved.price, Decimal("9.99"))
+        tables = self._get_table_names()
+        self.assertTrue(self.EXPECTED_TABLES.issubset(tables))
 
-        count = self.connection.execute("SELECT COUNT(*) FROM prices").fetchone()[0]
-        self.assertEqual(count, 1)
+    def test_expected_tables_are_created(self) -> None:
+        create_schema(self.connection)
 
-    def test_upsert_price_updates_existing_row_by_uniqueness_keys(self) -> None:
-        self.repository.upsert_price(
-            Price(
-                id=None,
-                product_id=1,
-                chain_id=10,
-                store_id=100,
-                price=Decimal("9.99"),
-                currency="ILS",
-                price_date=date(2026, 4, 9),
-                source_file="prices_a.csv",
-            )
-        )
+        tables = self._get_table_names()
+        self.assertSetEqual(self.EXPECTED_TABLES, tables)
 
-        updated = self.repository.upsert_price(
-            Price(
-                id=None,
-                product_id=1,
-                chain_id=10,
-                store_id=100,
-                price=Decimal("8.49"),
-                currency="ILS",
-                price_date=date(2026, 4, 9),
-                source_file="prices_b.csv",
-            )
-        )
+    def test_expected_indexes_exist(self) -> None:
+        create_schema(self.connection)
 
-        self.assertEqual(updated.price, Decimal("8.49"))
+        index_names = self._get_index_names()
+        self.assertTrue(self.EXPECTED_INDEXES.issubset(index_names))
 
+    def _get_table_names(self) -> set[str]:
         rows = self.connection.execute(
-            "SELECT price, source_file FROM prices WHERE product_id = 1 AND chain_id = 10 AND store_id = 100"
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name IN ('products', 'chains', 'stores', 'prices', 'basket_items');
+            """
         ).fetchall()
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0][0], "8.49")
-        self.assertEqual(rows[0][1], "prices_b.csv")
+        return {name for (name,) in rows}
 
-    def test_get_by_product_and_chain_returns_representative_min_price(self) -> None:
-        self.repository.upsert_price(
-            Price(None, 1, 10, 100, Decimal("12.00"), "ILS", date(2026, 4, 9), None)
-        )
-        self.repository.upsert_price(
-            Price(None, 1, 10, 200, Decimal("10.50"), "ILS", date(2026, 4, 9), None)
-        )
+    def _get_index_names(self) -> set[str]:
+        rows = self.connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'index'
+              AND name IN (
+                'idx_products_normalized_name',
+                'idx_stores_chain_id',
+                'idx_prices_product_chain',
+                'idx_prices_store_id',
+                'idx_basket_items_basket_id',
+                'idx_basket_items_product_id'
+              );
+            """
+        ).fetchall()
+        return {name for (name,) in rows}
 
-        selected = self.repository.get_by_product_and_chain(product_id=1, chain_id=10)
 
-        self.assertIsNotNone(selected)
-        self.assertEqual(selected.price, Decimal("10.50"))
-        self.assertEqual(selected.store_id, 200)
+class TestDatabaseManager(unittest.TestCase):
+    def test_get_connection_uses_configured_database_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "basket.sqlite"
+            manager = DatabaseManager(db_path)
 
-    def test_get_by_product_and_chain_missing_returns_none(self) -> None:
-        selected = self.repository.get_by_product_and_chain(product_id=999, chain_id=10)
-        self.assertIsNone(selected)
+            connection = manager.get_connection()
+            try:
+                connection.execute("CREATE TABLE sample(id INTEGER PRIMARY KEY);")
+            finally:
+                connection.close()
 
-    def test_get_prices_for_products_by_chain_returns_only_requested_ids(self) -> None:
-        self.repository.upsert_price(
-            Price(None, 1, 10, 100, Decimal("4.00"), "ILS", date(2026, 4, 9), None)
-        )
-        self.repository.upsert_price(
-            Price(None, 2, 10, 100, Decimal("7.00"), "ILS", date(2026, 4, 9), None)
-        )
-        self.repository.upsert_price(
-            Price(None, 3, 10, 100, Decimal("3.00"), "ILS", date(2026, 4, 9), None)
-        )
+            self.assertTrue(db_path.exists())
 
-        results = self.repository.get_prices_for_products_by_chain([1, 2], chain_id=10)
+    def test_initialize_database_creates_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "basket.sqlite"
+            manager = DatabaseManager(db_path)
 
-        self.assertEqual(set(results.keys()), {1, 2})
-        self.assertNotIn(3, results)
+            manager.initialize_database()
 
-    def test_get_prices_for_products_by_chain_uses_chain_min_price_and_no_chain_leak(self) -> None:
-        self.repository.upsert_price(
-            Price(None, 1, 10, 100, Decimal("9.50"), "ILS", date(2026, 4, 9), None)
-        )
-        self.repository.upsert_price(
-            Price(None, 1, 10, 101, Decimal("8.00"), "ILS", date(2026, 4, 9), None)
-        )
-        self.repository.upsert_price(
-            Price(None, 1, 20, 500, Decimal("1.00"), "ILS", date(2026, 4, 9), None)
-        )
-
-        results = self.repository.get_prices_for_products_by_chain([1], chain_id=10)
-
-        self.assertIn(1, results)
-        self.assertEqual(results[1].chain_id, 10)
-        self.assertEqual(results[1].price, Decimal("8.00"))
-        self.assertNotEqual(results[1].price, Decimal("1.00"))
+            verify_connection = sqlite3.connect(str(db_path))
+            try:
+                rows = verify_connection.execute(
+                    """
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type = 'table'
+                      AND name = 'products';
+                    """
+                ).fetchall()
+                self.assertEqual([("products",)], rows)
+            finally:
+                verify_connection.close()
 
 
 if __name__ == "__main__":

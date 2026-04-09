@@ -38,10 +38,10 @@
 - [x] Add repository unit tests
 
 ## 7. ChainRepository and StoreRepository
-- [ ] Implement chain upsert and lookup operations
-- [ ] Implement store upsert and lookup operations
-- [ ] Implement retrieval of stores by chain
-- [ ] Add repository unit tests
+- [x] Implement chain upsert and lookup operations
+- [x] Implement store upsert and lookup operations
+- [x] Implement retrieval of stores by chain
+- [x] Add repository unit tests
 
 ## 8. PriceRepository
 - [x] Implement price upsert
@@ -138,7 +138,7 @@
 ## 21. Unit tests by module
 - [x] Complete `test_models.py`
 - [x] Complete `test_utils.py` *(text utility coverage added)*
-- [x] Complete `test_db.py` *(BasketRepository coverage added)*
+- [x] Complete `test_db.py` *(BasketRepository + ChainRepository + StoreRepository coverage added)*
 - [x] Complete `test_data.py` *(parser infrastructure coverage added)*
 - [x] Complete `test_engine.py` *(engine result-building and validation paths covered)*
 - [x] Complete `test_app.py` *(application-layer orchestration coverage added)*

@@ -6,117 +6,195 @@ import sqlite3
 from datetime import date
 from decimal import Decimal
 
-from Modules.models.entities import BasketItem, Price, Product
+from Modules.models.entities import BasketItem, Chain, Price, Store
 
 
-class ProductRepository:
-    """Persistence and lookup operations for products."""
+class ChainRepository:
+    """Persistence and lookup operations for retail chains."""
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
 
-    def upsert_product(self, product: Product) -> Product:
-        """Insert or update one product using barcode as the MVP natural key."""
-        self._connection.execute(
+    def upsert_chain(self, chain: Chain) -> Chain:
+        """Insert or update a chain row by chain_code."""
+        existing_row = self._connection.execute(
             """
-            INSERT INTO products (barcode, name, normalized_name, brand, unit_name)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(barcode)
-            DO UPDATE SET
-                name = excluded.name,
-                normalized_name = excluded.normalized_name,
-                brand = excluded.brand,
-                unit_name = excluded.unit_name
+            SELECT id
+            FROM chains
+            WHERE chain_code = ?
             """,
-            (
-                product.barcode,
-                product.name,
-                product.normalized_name,
-                product.brand,
-                product.unit_name,
-            ),
-        )
-
-        row = self._connection.execute(
-            """
-            SELECT id, barcode, name, normalized_name, brand, unit_name
-            FROM products
-            WHERE barcode = ?
-            """,
-            (product.barcode,),
+            (chain.chain_code,),
         ).fetchone()
+
+        if existing_row is None:
+            cursor = self._connection.execute(
+                """
+                INSERT INTO chains (chain_code, name)
+                VALUES (?, ?)
+                """,
+                (chain.chain_code, chain.name),
+            )
+            persisted_id = int(cursor.lastrowid)
+        else:
+            persisted_id = int(existing_row[0])
+            self._connection.execute(
+                """
+                UPDATE chains
+                SET name = ?
+                WHERE id = ?
+                """,
+                (chain.name, persisted_id),
+            )
+
         self._connection.commit()
+        return Chain(id=persisted_id, chain_code=chain.chain_code, name=chain.name)
 
-        if row is None:
-            raise ValueError(f"missing product after upsert: {product.barcode}")
-
-        return self._row_to_product(row)
-
-    def get_by_barcode(self, barcode: str) -> Product | None:
-        """Return one product that matches the requested barcode."""
+    def get_by_id(self, chain_id: int) -> Chain | None:
+        """Return one chain by identifier."""
         row = self._connection.execute(
             """
-            SELECT id, barcode, name, normalized_name, brand, unit_name
-            FROM products
-            WHERE barcode = ?
+            SELECT id, chain_code, name
+            FROM chains
+            WHERE id = ?
             """,
-            (barcode,),
+            (chain_id,),
         ).fetchone()
         if row is None:
             return None
-        return self._row_to_product(row)
+        return self._row_to_chain(row)
 
-    def get_by_normalized_name(self, normalized_name: str) -> list[Product]:
-        """Return all products that match one normalized name value."""
-        rows = self._connection.execute(
+    def get_by_chain_code(self, chain_code: str) -> Chain | None:
+        """Return one chain by chain code."""
+        row = self._connection.execute(
             """
-            SELECT id, barcode, name, normalized_name, brand, unit_name
-            FROM products
-            WHERE normalized_name = ?
-            ORDER BY id ASC
+            SELECT id, chain_code, name
+            FROM chains
+            WHERE chain_code = ?
             """,
-            (normalized_name,),
-        ).fetchall()
-        return [self._row_to_product(row) for row in rows]
-
-    def get_products_by_ids(self, product_ids: list[int]) -> list[dict[str, object]]:
-        """Return products by IDs as dictionary read models in requested order."""
-        if not product_ids:
-            return []
-
-        placeholders = ",".join(["?"] * len(product_ids))
-        rows = self._connection.execute(
-            f"""
-            SELECT id, barcode, name, normalized_name, brand, unit_name
-            FROM products
-            WHERE id IN ({placeholders})
-            """,
-            product_ids,
-        ).fetchall()
-
-        by_id: dict[int, dict[str, object]] = {
-            int(row[0]): {
-                "id": int(row[0]),
-                "barcode": str(row[1]),
-                "name": str(row[2]),
-                "normalized_name": str(row[3]),
-                "brand": row[4],
-                "unit_name": row[5],
-            }
-            for row in rows
-        }
-        return [by_id[product_id] for product_id in product_ids if product_id in by_id]
+            (chain_code,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_chain(row)
 
     @staticmethod
-    def _row_to_product(row: sqlite3.Row | tuple[object, ...]) -> Product:
-        """Map one `products` row into a Product entity."""
-        return Product(
+    def _row_to_chain(row: sqlite3.Row | tuple[object, ...]) -> Chain:
+        """Map one `chains` row into a Chain entity."""
+        return Chain(id=int(row[0]), chain_code=str(row[1]), name=str(row[2]))
+
+
+class StoreRepository:
+    """Persistence and lookup operations for stores."""
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+
+    def upsert_store(self, store: Store) -> Store:
+        """Insert or update a store by its chain-level natural key."""
+        existing_row = self._connection.execute(
+            """
+            SELECT id
+            FROM stores
+            WHERE chain_id = ? AND store_code = ?
+            """,
+            (store.chain_id, store.store_code),
+        ).fetchone()
+
+        is_active_value = 1 if store.is_active else 0
+
+        if existing_row is None:
+            cursor = self._connection.execute(
+                """
+                INSERT INTO stores (chain_id, store_code, name, city, address, is_active)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    store.chain_id,
+                    store.store_code,
+                    store.name,
+                    store.city,
+                    store.address,
+                    is_active_value,
+                ),
+            )
+            persisted_id = int(cursor.lastrowid)
+        else:
+            persisted_id = int(existing_row[0])
+            self._connection.execute(
+                """
+                UPDATE stores
+                SET name = ?,
+                    city = ?,
+                    address = ?,
+                    is_active = ?
+                WHERE id = ?
+                """,
+                (store.name, store.city, store.address, is_active_value, persisted_id),
+            )
+
+        self._connection.commit()
+        return Store(
+            id=persisted_id,
+            chain_id=store.chain_id,
+            store_code=store.store_code,
+            name=store.name,
+            city=store.city,
+            address=store.address,
+            is_active=store.is_active,
+        )
+
+    def get_by_id(self, store_id: int) -> Store | None:
+        """Return one store by identifier."""
+        row = self._connection.execute(
+            """
+            SELECT id, chain_id, store_code, name, city, address, is_active
+            FROM stores
+            WHERE id = ?
+            """,
+            (store_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_store(row)
+
+    def get_by_chain_and_store_code(self, chain_id: int, store_code: str) -> Store | None:
+        """Return one store by chain id and store code."""
+        row = self._connection.execute(
+            """
+            SELECT id, chain_id, store_code, name, city, address, is_active
+            FROM stores
+            WHERE chain_id = ? AND store_code = ?
+            """,
+            (chain_id, store_code),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_store(row)
+
+    def get_stores_by_chain(self, chain_id: int) -> list[Store]:
+        """Return all stores for one chain ordered deterministically by id."""
+        rows = self._connection.execute(
+            """
+            SELECT id, chain_id, store_code, name, city, address, is_active
+            FROM stores
+            WHERE chain_id = ?
+            ORDER BY id ASC
+            """,
+            (chain_id,),
+        ).fetchall()
+        return [self._row_to_store(row) for row in rows]
+
+    @staticmethod
+    def _row_to_store(row: sqlite3.Row | tuple[object, ...]) -> Store:
+        """Map one `stores` row into a Store entity."""
+        return Store(
             id=int(row[0]),
-            barcode=str(row[1]),
-            name=str(row[2]),
-            normalized_name=str(row[3]),
-            brand=row[4],
-            unit_name=row[5],
+            chain_id=int(row[1]),
+            store_code=str(row[2]),
+            name=str(row[3]),
+            city=row[4],
+            address=row[5],
+            is_active=bool(int(row[6])),
         )
 
 

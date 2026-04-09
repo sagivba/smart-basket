@@ -25,11 +25,14 @@ class BasketEngine:
         basket_items: Sequence[Mapping[str, Any]],
     ) -> ChainComparisonResult:
         """Build a single chain comparison result from matched basket items."""
+        validated_basket_items = self._validate_basket_items_for_calculation(basket_items)
+        self.collect_matched_product_ids(validated_basket_items)
+
         basket_lines: list[BasketLineResult] = []
         missing_items: list[str] = []
         total_price = 0.0
 
-        for basket_item in basket_items:
+        for basket_item in validated_basket_items:
             line_result = self._build_line_result(basket_item)
             basket_lines.append(line_result)
 
@@ -74,6 +77,57 @@ class BasketEngine:
             ranked_chains=ranked_chains,
             unmatched_items=list(unmatched_items or []),
         )
+
+    def collect_matched_product_ids(
+        self, basket_items: Sequence[Mapping[str, Any]]
+    ) -> list[int]:
+        """Collect unique matched product IDs from basket items, preserving order."""
+        matched_product_ids: list[int] = []
+        seen_product_ids: set[int] = set()
+
+        for basket_item in basket_items:
+            product_id = basket_item.get("product_id")
+            if product_id is None:
+                continue
+
+            if not isinstance(product_id, int) or isinstance(product_id, bool):
+                raise TypeError("product_id must be an integer when provided")
+
+            if product_id not in seen_product_ids:
+                seen_product_ids.add(product_id)
+                matched_product_ids.append(product_id)
+
+        return matched_product_ids
+
+    def _validate_basket_items_for_calculation(
+        self, basket_items: Sequence[Mapping[str, Any]]
+    ) -> list[Mapping[str, Any]]:
+        """Validate all items required for line and total-price calculation."""
+        return [self._validate_basket_item_for_calculation(item) for item in basket_items]
+
+    def _validate_basket_item_for_calculation(
+        self, basket_item: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        """Validate a single basket item used for calculation."""
+        if "quantity" not in basket_item:
+            raise ValueError("basket_item.quantity is required")
+        if "product_name" not in basket_item:
+            raise ValueError("basket_item.product_name is required")
+
+        quantity = basket_item["quantity"]
+        if not isinstance(quantity, int) or isinstance(quantity, bool):
+            raise TypeError("quantity must be an integer")
+        if quantity <= 0:
+            raise ValueError("quantity must be a positive integer")
+
+        product_name = basket_item["product_name"]
+        if not isinstance(product_name, str):
+            raise TypeError("product_name must be a string")
+        if not product_name.strip():
+            raise ValueError("product_name must not be empty")
+
+        self._normalize_unit_price(basket_item.get("unit_price"))
+        return basket_item
 
     def _build_line_result(self, basket_item: Mapping[str, Any]) -> BasketLineResult:
         """Build a line result and mark availability from the given unit price."""

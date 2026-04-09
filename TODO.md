@@ -21,34 +21,34 @@
 ## 4. Text utilities and validators
 - [x] Implement text normalization helpers
 - [x] Implement product name normalization helpers
-- [ ] Implement barcode, quantity, price, and required-field validation
-- [ ] Add unit tests for utilities and validators
+- [x] Implement barcode, quantity, price, and required-field validation
+- [ ] Add unit tests for utilities and validators *(partial: text utility tests exist; validator-specific tests are missing)*
 
 ## 5. SQLite connection manager and schema creation
 - [x] Implement `ConnectionFactory` and `DatabaseManager`
 - [x] Implement schema creation for `products`, `chains`, `stores`, `prices`, and `basket_items`
 - [x] Create required foreign keys and indexes
-- [x] Add unit tests for schema creation and DB initialization
+- [ ] Add unit tests for schema creation and DB initialization *(partial: schema is exercised indirectly by loader tests, but no direct DB-manager/schema unit tests)*
 
 ## 6. ProductRepository
 - [ ] Implement product upsert
 - [ ] Implement lookup by barcode
 - [ ] Implement lookup by normalized name
 - [ ] Implement retrieval by product IDs
-- [x] Add repository unit tests
+- [ ] Add repository unit tests *(partial: repository tests currently cover `BasketRepository` only)*
 
 ## 7. ChainRepository and StoreRepository
 - [ ] Implement chain upsert and lookup operations
 - [ ] Implement store upsert and lookup operations
 - [ ] Implement retrieval of stores by chain
-- [x] Add repository unit tests
+- [ ] Add repository unit tests *(partial: repository tests currently cover `BasketRepository` only)*
 
 ## 8. PriceRepository
 - [ ] Implement price upsert
 - [ ] Implement price retrieval by product and chain
 - [ ] Implement `get_prices_for_products_by_chain()`
 - [ ] Implement the MVP representative price rule for a chain
-- [x] Add repository unit tests
+- [ ] Add repository unit tests *(partial: repository tests currently cover `BasketRepository` only)*
 
 ## 9. BasketRepository
 - [x] Implement basket item persistence
@@ -68,20 +68,20 @@
 - [x] Implement `parse_prices_file()`
 - [ ] Implement `parse_stores_file()`
 - [x] Implement row normalization and invalid row handling *(for product/price parsing flows)*
-- [x] Add parsing unit tests with deterministic fixtures
+- [ ] Add parsing unit tests with deterministic fixtures *(partial: parsing unit tests exist but currently use inline temporary files rather than `tests/fixtures` files)*
 
 ## 12. Data loader orchestration
 - [x] Implement `LoadJob` and `LoadResult`
 - [x] Implement `PriceDataLoader`
-- [x] Implement `load_products()`, `load_prices()`, and `load_stores()`
+- [ ] Implement `load_products()`, `load_prices()`, and `load_stores()` *(partial: all three loader methods exist; `load_stores()` depends on missing `parse_stores_file()`)*
 - [x] Implement `replace` and `append` loading modes
 - [x] Add loader unit tests
 
 ## 13. Barcode-based product matching
-- [x] Implement direct product matching by barcode
-- [x] Mark unknown barcode items as unmatched
-- [x] Return a consistent matching result structure
-- [x] Add matching unit tests
+- [ ] Implement direct product matching by barcode *(partial: engine currently consumes pre-matched input and does not perform barcode matching itself)*
+- [ ] Mark unknown barcode items as unmatched
+- [ ] Return a consistent matching result structure
+- [ ] Add matching unit tests
 
 ## 14. Name-based product matching
 - [ ] Implement normalized-name product matching
@@ -91,8 +91,8 @@
 - [ ] Add matching unit tests
 
 ## 15. Basket calculation
-- [x] Implement basket item validation before calculation
-- [x] Implement matched product ID collection
+- [ ] Implement basket item validation before calculation *(partial: line-model validation exists, but no dedicated pre-calculation basket validation flow)*
+- [ ] Implement matched product ID collection
 - [x] Implement line price and total chain cost calculation
 - [x] Implement found item counting
 - [x] Add calculation unit tests
@@ -106,11 +106,11 @@
 - [x] Add unit tests
 
 ## 17. Chain ranking and comparison service
-- [x] Implement `BasketCalculator` integration into comparison flow
-- [x] Implement `BasketComparisonService`
-- [x] Implement `compare_basket()`
-- [x] Implement `rank_chains()` with complete baskets ranked before partial baskets
-- [x] Add unit tests for ranking and comparison behavior
+- [ ] Implement `BasketCalculator` integration into comparison flow
+- [ ] Implement `BasketComparisonService`
+- [ ] Implement `compare_basket()`
+- [ ] Implement `rank_chains()` with complete baskets ranked before partial baskets
+- [ ] Add unit tests for ranking and comparison behavior
 
 ## 18. Application service and use cases
 - [x] Implement `ApplicationService`
@@ -145,8 +145,8 @@
 - [ ] Ensure all new behavior is covered with `unittest` only
 
 ## 22. Integration tests
-- [ ] Implement `test_import_flow.py` *(partial: scaffold file now exists with placeholder only)*
-- [ ] Implement `test_basket_comparison.py` *(partial: scaffold file now exists with placeholder only)*
+- [ ] Implement `test_import_flow.py` *(partial: scaffold file exists with placeholder assertion only)*
+- [ ] Implement `test_basket_comparison.py` *(partial: scaffold file exists with placeholder assertion only)*
 - [ ] Add an end-to-end file-to-database loading scenario
 - [ ] Add an end-to-end basket comparison scenario
 - [ ] Add scenarios for missing items and unmatched items
@@ -161,9 +161,9 @@
 ## 24. Documentation alignment and project hardening
 - [ ] Update `README.md` with installation, run, and test instructions
 - [ ] Update `module_guide.md` with layer boundaries and dependencies
-- [ ] Update `test_strategy.md` with testing patterns and execution guidance
+- [x] Update `test_strategy.md` with testing patterns and execution guidance
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
-- [ ] Verify Python 3.12 compatibility
+- [ ] Verify Python 3.12 compatibility *(partial: CI is configured for Python 3.12, but compatibility is not documented/explicitly verified in-project)*
 - [ ] Verify the system runs fully offline
 - [ ] Verify responsibilities remain cleanly separated across layers
 

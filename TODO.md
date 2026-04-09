@@ -162,6 +162,7 @@
 - [ ] Update `README.md` with installation, run, and test instructions
 - [ ] Update `module_guide.md` with layer boundaries and dependencies
 - [ ] Update `test_strategy.md` with testing patterns and execution guidance
+- [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
 - [ ] Verify Python 3.12 compatibility
 - [ ] Verify the system runs fully offline
 - [ ] Verify responsibilities remain cleanly separated across layers

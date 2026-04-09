@@ -6,7 +6,118 @@ import sqlite3
 from datetime import date
 from decimal import Decimal
 
-from Modules.models.entities import BasketItem, Price
+from Modules.models.entities import BasketItem, Price, Product
+
+
+class ProductRepository:
+    """Persistence and lookup operations for products."""
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self._connection = connection
+
+    def upsert_product(self, product: Product) -> Product:
+        """Insert or update one product using barcode as the MVP natural key."""
+        self._connection.execute(
+            """
+            INSERT INTO products (barcode, name, normalized_name, brand, unit_name)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(barcode)
+            DO UPDATE SET
+                name = excluded.name,
+                normalized_name = excluded.normalized_name,
+                brand = excluded.brand,
+                unit_name = excluded.unit_name
+            """,
+            (
+                product.barcode,
+                product.name,
+                product.normalized_name,
+                product.brand,
+                product.unit_name,
+            ),
+        )
+
+        row = self._connection.execute(
+            """
+            SELECT id, barcode, name, normalized_name, brand, unit_name
+            FROM products
+            WHERE barcode = ?
+            """,
+            (product.barcode,),
+        ).fetchone()
+        self._connection.commit()
+
+        if row is None:
+            raise ValueError(f"missing product after upsert: {product.barcode}")
+
+        return self._row_to_product(row)
+
+    def get_by_barcode(self, barcode: str) -> Product | None:
+        """Return one product that matches the requested barcode."""
+        row = self._connection.execute(
+            """
+            SELECT id, barcode, name, normalized_name, brand, unit_name
+            FROM products
+            WHERE barcode = ?
+            """,
+            (barcode,),
+        ).fetchone()
+        if row is None:
+            return None
+        return self._row_to_product(row)
+
+    def get_by_normalized_name(self, normalized_name: str) -> list[Product]:
+        """Return all products that match one normalized name value."""
+        rows = self._connection.execute(
+            """
+            SELECT id, barcode, name, normalized_name, brand, unit_name
+            FROM products
+            WHERE normalized_name = ?
+            ORDER BY id ASC
+            """,
+            (normalized_name,),
+        ).fetchall()
+        return [self._row_to_product(row) for row in rows]
+
+    def get_products_by_ids(self, product_ids: list[int]) -> list[dict[str, object]]:
+        """Return products by IDs as dictionary read models in requested order."""
+        if not product_ids:
+            return []
+
+        placeholders = ",".join(["?"] * len(product_ids))
+        rows = self._connection.execute(
+            f"""
+            SELECT id, barcode, name, normalized_name, brand, unit_name
+            FROM products
+            WHERE id IN ({placeholders})
+            """,
+            product_ids,
+        ).fetchall()
+
+        by_id: dict[int, dict[str, object]] = {
+            int(row[0]): {
+                "id": int(row[0]),
+                "barcode": str(row[1]),
+                "name": str(row[2]),
+                "normalized_name": str(row[3]),
+                "brand": row[4],
+                "unit_name": row[5],
+            }
+            for row in rows
+        }
+        return [by_id[product_id] for product_id in product_ids if product_id in by_id]
+
+    @staticmethod
+    def _row_to_product(row: sqlite3.Row | tuple[object, ...]) -> Product:
+        """Map one `products` row into a Product entity."""
+        return Product(
+            id=int(row[0]),
+            barcode=str(row[1]),
+            name=str(row[2]),
+            normalized_name=str(row[3]),
+            brand=row[4],
+            unit_name=row[5],
+        )
 
 
 class PriceRepository:

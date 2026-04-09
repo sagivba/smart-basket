@@ -296,7 +296,7 @@ class TestBasketEngineResultBuilding(unittest.TestCase):
             )
 
     def test_build_chain_result_rejects_non_integer_quantity_string(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(TypeError, "quantity must be an integer"):
             self.engine.build_chain_result(
                 chain_id=1,
                 chain_name="Chain X",
@@ -310,7 +310,7 @@ class TestBasketEngineResultBuilding(unittest.TestCase):
             )
 
     def test_build_chain_result_requires_product_name(self) -> None:
-        with self.assertRaises(KeyError):
+        with self.assertRaisesRegex(ValueError, "basket_item.product_name is required"):
             self.engine.build_chain_result(
                 chain_id=1,
                 chain_name="Chain X",

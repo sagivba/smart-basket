@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+import tempfile
 from unittest.mock import patch
 
 from Modules.data.data_loader import PriceDataLoader
@@ -155,6 +156,14 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
 
     def _fixture_path(self, name: str) -> Path:
         return self.FIXTURES_DIR / name
+
+    def _write_temp_file(self, suffix: str, content: str) -> Path:
+        handle = tempfile.NamedTemporaryFile("w", suffix=suffix, encoding="utf-8", delete=False)
+        with handle:
+            handle.write(content)
+            file_path = Path(handle.name)
+        self.addCleanup(file_path.unlink, missing_ok=True)
+        return file_path
 
     def test_parse_products_file_csv_success_with_normalization(self) -> None:
         file_path = self._fixture_path("products_valid.csv")
@@ -382,6 +391,7 @@ class TestPriceDataLoader(unittest.TestCase):
                 "CH1,Chain One,S1,Store One,City A,Address A,true\n"
             )
             file_path = handle.name
+        self.addCleanup(Path(file_path).unlink, missing_ok=True)
 
         result = self.loader.load_stores(file_path, mode="append")
 

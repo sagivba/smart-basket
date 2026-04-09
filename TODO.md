@@ -8,9 +8,9 @@
 - [ ] Add `data/raw`, `data/samples`, `data/generated`, and `tests/fixtures` *(partial: `tests/fixtures` exists; `data/` subdirectories are missing)*
 
 ## 2. Core domain entities
-- [ ] Implement `Product`, `Chain`, `Store`, `Price`, and `BasketItem`
-- [ ] Keep domain models independent from DB and business logic
-- [ ] Add unit tests for entity creation and basic validation
+- [x] Implement `Product`, `Chain`, `Store`, `Price`, and `BasketItem`
+- [x] Keep domain models independent from DB and business logic
+- [x] Add unit tests for entity creation and basic validation
 
 ## 3. Result models and enums
 - [ ] Implement `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
@@ -136,7 +136,7 @@
 - [ ] Add CLI-level tests if applicable
 
 ## 21. Unit tests by module
-- [ ] Complete `test_models.py` *(partial: file exists, currently empty)*
+- [x] Complete `test_models.py`
 - [ ] Complete `test_utils.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_db.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_data.py` *(partial: file exists, currently empty)*

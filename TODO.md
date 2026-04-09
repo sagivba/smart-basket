@@ -57,11 +57,11 @@
 - [x] Add repository unit tests
 
 ## 10. Parser core infrastructure
-- [ ] Implement parsing models such as `ParsedProductRecord` and `ParsedPriceRecord`
-- [ ] Implement `FileParser`
-- [ ] Implement file format detection
-- [ ] Implement parsing summary and error collection structures
-- [ ] Add parser infrastructure unit tests
+- [x] Implement parsing models such as `ParsedProductRecord` and `ParsedPriceRecord`
+- [x] Implement `FileParser`
+- [x] Implement file format detection
+- [x] Implement parsing summary and error collection structures
+- [x] Add parser infrastructure unit tests
 
 ## 11. Product, store, and price file parsing
 - [ ] Implement `parse_products_file()`

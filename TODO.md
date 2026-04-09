@@ -159,7 +159,7 @@
 - [x] Create integration test fixtures
 
 ## 24. Documentation alignment and project hardening
-- [ ] Update `README.md` with installation, run, and test instructions
+- [x] Update `README.md` with installation, run, and test instructions
 - [ ] Update `module_guide.md` with layer boundaries and dependencies
 - [x] Update `test_strategy.md` with testing patterns and execution guidance
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`

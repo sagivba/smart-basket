@@ -1,179 +1,145 @@
-"""Unit tests for db repositories."""
+"""Unit tests for database repositories."""
 
 from __future__ import annotations
 
 import sqlite3
 import unittest
+from datetime import date
+from decimal import Decimal
 
-from Modules.db.repositories import ProductRepository
-from Modules.models.entities import Product
+from Modules.db.repositories import PriceRepository
+from Modules.models.entities import Price
 
 
-class TestProductRepository(unittest.TestCase):
+class PriceRepositoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.connection = sqlite3.connect(":memory:")
         self.connection.execute(
             """
-            CREATE TABLE products (
+            CREATE TABLE prices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                barcode TEXT NOT NULL UNIQUE,
-                name TEXT NOT NULL,
-                normalized_name TEXT NOT NULL,
-                brand TEXT,
-                unit_name TEXT
+                product_id INTEGER NOT NULL,
+                chain_id INTEGER NOT NULL,
+                store_id INTEGER NOT NULL,
+                price TEXT NOT NULL,
+                currency TEXT NOT NULL,
+                price_date TEXT NOT NULL,
+                source_file TEXT
             )
             """
         )
-        self.repository = ProductRepository(self.connection)
+        self.repository = PriceRepository(self.connection)
 
     def tearDown(self) -> None:
         self.connection.close()
 
-    def test_upsert_product_inserts_new_product(self) -> None:
-        product = Product(
+    def test_upsert_price_inserts_new_row(self) -> None:
+        price = Price(
             id=None,
-            barcode="7290011111111",
-            name="Milk 1L",
-            normalized_name="milk 1l",
-            brand="DairyCo",
-            unit_name="1L",
+            product_id=1,
+            chain_id=10,
+            store_id=100,
+            price=Decimal("9.99"),
+            currency="ILS",
+            price_date=date(2026, 4, 9),
+            source_file="prices_a.csv",
         )
 
-        saved = self.repository.upsert_product(product)
+        saved = self.repository.upsert_price(price)
 
         self.assertIsNotNone(saved.id)
-        fetched = self.repository.get_by_barcode("7290011111111")
-        self.assertIsNotNone(fetched)
-        self.assertEqual(fetched.id, saved.id)
-        self.assertEqual(fetched.name, "Milk 1L")
+        self.assertEqual(saved.price, Decimal("9.99"))
 
-    def test_upsert_product_updates_existing_product_by_barcode(self) -> None:
-        original = Product(
-            id=None,
-            barcode="7290011111111",
-            name="Milk 1L",
-            normalized_name="milk 1l",
-            brand="DairyCo",
-            unit_name="1L",
-        )
-        saved = self.repository.upsert_product(original)
+        count = self.connection.execute("SELECT COUNT(*) FROM prices").fetchone()[0]
+        self.assertEqual(count, 1)
 
-        updated = Product(
-            id=None,
-            barcode="7290011111111",
-            name="Milk Updated",
-            normalized_name="milk updated",
-            brand="NewBrand",
-            unit_name="1000ml",
-        )
-        saved_updated = self.repository.upsert_product(updated)
-
-        self.assertEqual(saved.id, saved_updated.id)
-        fetched = self.repository.get_by_barcode("7290011111111")
-        self.assertIsNotNone(fetched)
-        self.assertEqual(fetched.name, "Milk Updated")
-        self.assertEqual(fetched.normalized_name, "milk updated")
-        self.assertEqual(fetched.brand, "NewBrand")
-        self.assertEqual(fetched.unit_name, "1000ml")
-
-    def test_get_by_barcode_returns_expected_product(self) -> None:
-        saved = self.repository.upsert_product(
-            Product(
+    def test_upsert_price_updates_existing_row_by_uniqueness_keys(self) -> None:
+        self.repository.upsert_price(
+            Price(
                 id=None,
-                barcode="7290012222222",
-                name="Bread",
-                normalized_name="bread",
-                brand="BakeCo",
-                unit_name="1 unit",
+                product_id=1,
+                chain_id=10,
+                store_id=100,
+                price=Decimal("9.99"),
+                currency="ILS",
+                price_date=date(2026, 4, 9),
+                source_file="prices_a.csv",
             )
         )
 
-        found = self.repository.get_by_barcode("7290012222222")
-
-        self.assertEqual(found, saved)
-
-    def test_get_by_barcode_returns_none_for_missing_barcode(self) -> None:
-        found = self.repository.get_by_barcode("7290099999999")
-
-        self.assertIsNone(found)
-
-    def test_get_by_normalized_name_returns_matching_products(self) -> None:
-        first = self.repository.upsert_product(
-            Product(
+        updated = self.repository.upsert_price(
+            Price(
                 id=None,
-                barcode="7290013000001",
-                name="Yogurt Strawberry",
-                normalized_name="yogurt",
-                brand="DairyCo",
-                unit_name="150g",
-            )
-        )
-        second = self.repository.upsert_product(
-            Product(
-                id=None,
-                barcode="7290013000002",
-                name="Yogurt Vanilla",
-                normalized_name="yogurt",
-                brand="DairyCo",
-                unit_name="150g",
-            )
-        )
-        self.repository.upsert_product(
-            Product(
-                id=None,
-                barcode="7290013000003",
-                name="Cheese",
-                normalized_name="cheese",
-                brand="DairyCo",
-                unit_name="200g",
+                product_id=1,
+                chain_id=10,
+                store_id=100,
+                price=Decimal("8.49"),
+                currency="ILS",
+                price_date=date(2026, 4, 9),
+                source_file="prices_b.csv",
             )
         )
 
-        found = self.repository.get_by_normalized_name("yogurt")
+        self.assertEqual(updated.price, Decimal("8.49"))
 
-        self.assertEqual([product.id for product in found], [first.id, second.id])
+        rows = self.connection.execute(
+            "SELECT price, source_file FROM prices WHERE product_id = 1 AND chain_id = 10 AND store_id = 100"
+        ).fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][0], "8.49")
+        self.assertEqual(rows[0][1], "prices_b.csv")
 
-    def test_get_by_normalized_name_returns_empty_for_missing_name(self) -> None:
-        found = self.repository.get_by_normalized_name("non-existent")
-
-        self.assertEqual(found, [])
-
-    def test_get_by_ids_returns_only_requested_products(self) -> None:
-        first = self.repository.upsert_product(
-            Product(
-                id=None,
-                barcode="7290014000001",
-                name="Rice",
-                normalized_name="rice",
-                brand="GrainCo",
-                unit_name="1kg",
-            )
+    def test_get_by_product_and_chain_returns_representative_min_price(self) -> None:
+        self.repository.upsert_price(
+            Price(None, 1, 10, 100, Decimal("12.00"), "ILS", date(2026, 4, 9), None)
         )
-        second = self.repository.upsert_product(
-            Product(
-                id=None,
-                barcode="7290014000002",
-                name="Pasta",
-                normalized_name="pasta",
-                brand="GrainCo",
-                unit_name="500g",
-            )
-        )
-        third = self.repository.upsert_product(
-            Product(
-                id=None,
-                barcode="7290014000003",
-                name="Beans",
-                normalized_name="beans",
-                brand="GrainCo",
-                unit_name="500g",
-            )
+        self.repository.upsert_price(
+            Price(None, 1, 10, 200, Decimal("10.50"), "ILS", date(2026, 4, 9), None)
         )
 
-        found = self.repository.get_by_ids([third.id, first.id, 9999])
+        selected = self.repository.get_by_product_and_chain(product_id=1, chain_id=10)
 
-        self.assertEqual([product.id for product in found], [first.id, third.id])
-        self.assertNotIn(second.id, [product.id for product in found])
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected.price, Decimal("10.50"))
+        self.assertEqual(selected.store_id, 200)
+
+    def test_get_by_product_and_chain_missing_returns_none(self) -> None:
+        selected = self.repository.get_by_product_and_chain(product_id=999, chain_id=10)
+        self.assertIsNone(selected)
+
+    def test_get_prices_for_products_by_chain_returns_only_requested_ids(self) -> None:
+        self.repository.upsert_price(
+            Price(None, 1, 10, 100, Decimal("4.00"), "ILS", date(2026, 4, 9), None)
+        )
+        self.repository.upsert_price(
+            Price(None, 2, 10, 100, Decimal("7.00"), "ILS", date(2026, 4, 9), None)
+        )
+        self.repository.upsert_price(
+            Price(None, 3, 10, 100, Decimal("3.00"), "ILS", date(2026, 4, 9), None)
+        )
+
+        results = self.repository.get_prices_for_products_by_chain([1, 2], chain_id=10)
+
+        self.assertEqual(set(results.keys()), {1, 2})
+        self.assertNotIn(3, results)
+
+    def test_get_prices_for_products_by_chain_uses_chain_min_price_and_no_chain_leak(self) -> None:
+        self.repository.upsert_price(
+            Price(None, 1, 10, 100, Decimal("9.50"), "ILS", date(2026, 4, 9), None)
+        )
+        self.repository.upsert_price(
+            Price(None, 1, 10, 101, Decimal("8.00"), "ILS", date(2026, 4, 9), None)
+        )
+        self.repository.upsert_price(
+            Price(None, 1, 20, 500, Decimal("1.00"), "ILS", date(2026, 4, 9), None)
+        )
+
+        results = self.repository.get_prices_for_products_by_chain([1], chain_id=10)
+
+        self.assertIn(1, results)
+        self.assertEqual(results[1].chain_id, 10)
+        self.assertEqual(results[1].price, Decimal("8.00"))
+        self.assertNotEqual(results[1].price, Decimal("1.00"))
 
 
 if __name__ == "__main__":

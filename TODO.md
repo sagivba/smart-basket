@@ -91,8 +91,8 @@
 - [ ] Add matching unit tests
 
 ## 15. Basket calculation
-- [ ] Implement basket item validation before calculation *(partial: line-model validation exists, but no dedicated pre-calculation basket validation flow)*
-- [ ] Implement matched product ID collection
+- [x] Implement basket item validation before calculation
+- [x] Implement matched product ID collection
 - [x] Implement line price and total chain cost calculation
 - [x] Implement found item counting
 - [x] Add calculation unit tests

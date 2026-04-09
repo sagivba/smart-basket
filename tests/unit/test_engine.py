@@ -213,6 +213,78 @@ class TestBasketEngineResultBuilding(unittest.TestCase):
                 ],
             )
 
+    def test_build_chain_result_rejects_missing_quantity_before_calculation(self) -> None:
+        with self.assertRaises(ValueError):
+            self.engine.build_chain_result(
+                chain_id=1,
+                chain_name="Chain X",
+                basket_items=[
+                    {
+                        "product_name": "Milk",
+                        "unit_price": 5.0,
+                    }
+                ],
+            )
+
+    def test_build_chain_result_rejects_non_integer_quantity_before_calculation(self) -> None:
+        with self.assertRaises(TypeError):
+            self.engine.build_chain_result(
+                chain_id=1,
+                chain_name="Chain X",
+                basket_items=[
+                    {
+                        "product_name": "Milk",
+                        "quantity": 1.5,
+                        "unit_price": 5.0,
+                    }
+                ],
+            )
+
+    def test_build_chain_result_rejects_missing_product_name_before_calculation(self) -> None:
+        with self.assertRaises(ValueError):
+            self.engine.build_chain_result(
+                chain_id=1,
+                chain_name="Chain X",
+                basket_items=[
+                    {
+                        "quantity": 1,
+                        "unit_price": 5.0,
+                    }
+                ],
+            )
+
+    def test_build_chain_result_rejects_blank_product_name_before_calculation(self) -> None:
+        with self.assertRaises(ValueError):
+            self.engine.build_chain_result(
+                chain_id=1,
+                chain_name="Chain X",
+                basket_items=[
+                    {
+                        "product_name": "   ",
+                        "quantity": 1,
+                        "unit_price": 5.0,
+                    }
+                ],
+            )
+
+    def test_collect_matched_product_ids_returns_unique_ids_in_input_order(self) -> None:
+        matched_ids = self.engine.collect_matched_product_ids(
+            [
+                {"product_id": 7},
+                {"product_id": 2},
+                {"product_id": 7},
+                {"product_id": None},
+                {},
+                {"product_id": 5},
+            ]
+        )
+
+        self.assertEqual(matched_ids, [7, 2, 5])
+
+    def test_collect_matched_product_ids_rejects_non_integer_product_id(self) -> None:
+        with self.assertRaises(TypeError):
+            self.engine.collect_matched_product_ids([{"product_id": "7"}])
+
 
 if __name__ == "__main__":
     unittest.main()

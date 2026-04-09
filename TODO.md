@@ -78,10 +78,10 @@
 - [ ] Add loader unit tests
 
 ## 13. Barcode-based product matching
-- [ ] Implement direct product matching by barcode
-- [ ] Mark unknown barcode items as unmatched
-- [ ] Return a consistent matching result structure
-- [ ] Add matching unit tests
+- [x] Implement direct product matching by barcode
+- [x] Mark unknown barcode items as unmatched
+- [x] Return a consistent matching result structure
+- [x] Add matching unit tests
 
 ## 14. Name-based product matching
 - [ ] Implement normalized-name product matching
@@ -140,7 +140,7 @@
 - [x] Complete `test_utils.py` *(text utility coverage added)*
 - [x] Complete `test_db.py` *(BasketRepository coverage added)*
 - [x] Complete `test_data.py` *(parser infrastructure coverage added)*
-- [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*
+- [x] Complete `test_engine.py` *(barcode matching coverage added)*
 - [ ] Complete `test_app.py` *(partial: file exists, currently empty)*
 - [ ] Ensure all new behavior is covered with `unittest` only
 

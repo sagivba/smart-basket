@@ -246,7 +246,8 @@ class PriceDataLoader:
         if isinstance(raw_output, tuple):
             if len(raw_output) == 3:
                 records, summary, parse_errors = raw_output
-                return list(records), summary, list(parse_errors)
+                normalized_errors = getattr(parse_errors, "errors", parse_errors)
+                return list(records), summary, list(normalized_errors)
             if len(raw_output) == 2:
                 records, summary = raw_output
                 return list(records), summary, []
@@ -258,12 +259,22 @@ class PriceDataLoader:
             records = raw_output.get("records", [])
             summary = raw_output.get("summary")
             parse_errors = raw_output.get("errors", [])
-            return list(records), summary, list(parse_errors)
+            return list(records), summary, PriceDataLoader._as_parse_error_list(parse_errors)
 
         records = getattr(raw_output, "records", [])
         summary = getattr(raw_output, "summary", None)
         parse_errors = getattr(raw_output, "errors", [])
-        return list(records), summary, list(parse_errors)
+        return list(records), summary, PriceDataLoader._as_parse_error_list(parse_errors)
+
+    @staticmethod
+    def _as_parse_error_list(parse_errors: Any) -> list[Any]:
+        if parse_errors is None:
+            return []
+        if isinstance(parse_errors, list):
+            return parse_errors
+        if hasattr(parse_errors, "errors"):
+            return list(getattr(parse_errors, "errors"))
+        return list(parse_errors)
 
     @staticmethod
     def _merge_parse_outcome(result: LoadResult, summary: Any, parse_errors: list[Any]) -> None:

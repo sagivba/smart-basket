@@ -54,6 +54,20 @@ class ParsedPriceRecord:
 
 
 @dataclass(slots=True)
+class ParsedStoreRecord:
+    """Internal representation of a parsed chain/store row."""
+
+    source_row_number: int
+    chain_code: str
+    chain_name: str
+    store_code: str
+    store_name: str
+    city: str | None = None
+    address: str | None = None
+    is_active: str | None = None
+
+
+@dataclass(slots=True)
 class ParsingError:
     """Structured parsing error for malformed input rows."""
 
@@ -321,6 +335,47 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
     )
 
 
+def _build_store_record(row_number: int, raw_row: dict[str, Any]) -> ParsedStoreRecord:
+    """Build one validated ParsedStoreRecord from an input row."""
+    row = _normalize_row(raw_row)
+
+    chain_code = _get_required_field(
+        row,
+        ("chain_code", "chain"),
+        target_field="chain_code",
+        row_number=row_number,
+    )
+    chain_name = _get_required_field(
+        row,
+        ("chain_name", "chain"),
+        target_field="chain_name",
+        row_number=row_number,
+    )
+    store_code = _get_required_field(
+        row,
+        ("store_code", "store"),
+        target_field="store_code",
+        row_number=row_number,
+    )
+    store_name = _get_required_field(
+        row,
+        ("store_name", "name", "store"),
+        target_field="store_name",
+        row_number=row_number,
+    )
+
+    return ParsedStoreRecord(
+        source_row_number=row_number,
+        chain_code=chain_code,
+        chain_name=chain_name,
+        store_code=store_code,
+        store_name=store_name,
+        city=_get_optional_field(row, ("city",)),
+        address=_get_optional_field(row, ("address",)),
+        is_active=_get_optional_field(row, ("is_active", "active")),
+    )
+
+
 def parse_products_file(
     file_path: str | Path,
 ) -> tuple[list[ParsedProductRecord], ParsingSummary, ParsingErrorCollection]:
@@ -360,6 +415,33 @@ def parse_prices_file(
     for row_number, row in rows:
         try:
             records.append(_build_price_record(row_number, row))
+            summary.accepted_rows += 1
+        except _RowValidationError as exc:
+            summary.rejected_rows += 1
+            errors.add(
+                ParsingError(
+                    row_number=row_number,
+                    field_name=exc.field_name,
+                    message=exc.message,
+                    raw_value=exc.raw_value,
+                )
+            )
+
+    return records, summary, errors
+
+
+def parse_stores_file(
+    file_path: str | Path,
+) -> tuple[list[ParsedStoreRecord], ParsingSummary, ParsingErrorCollection]:
+    """Parse an MVP store file and return parsed records with structured outcomes."""
+    summary = FileParser.create_summary(file_path)
+    errors = FileParser.create_error_collection()
+    _, rows = _read_rows(file_path)
+
+    records: list[ParsedStoreRecord] = []
+    for row_number, row in rows:
+        try:
+            records.append(_build_store_record(row_number, row))
             summary.accepted_rows += 1
         except _RowValidationError as exc:
             summary.rejected_rows += 1

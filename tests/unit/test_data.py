@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -14,12 +13,14 @@ from Modules.data.parser import (
     MalformedFileContentError,
     ParsedPriceRecord,
     ParsedProductRecord,
+    ParsedStoreRecord,
     ParsingError,
     ParsingErrorCollection,
     ParsingSummary,
     UnsupportedFileFormatError,
     parse_prices_file,
     parse_products_file,
+    parse_stores_file,
 )
 from Modules.db.database import create_schema
 
@@ -60,6 +61,27 @@ class TestParsedRecords(unittest.TestCase):
         self.assertEqual(record.price_text, "14.90")
         self.assertEqual(record.currency, "ILS")
         self.assertEqual(record.price_date_text, "2026-04-09")
+
+    def test_parsed_store_record_construction(self) -> None:
+        record = ParsedStoreRecord(
+            source_row_number=7,
+            chain_code="CH01",
+            chain_name="Chain One",
+            store_code="ST10",
+            store_name="Store Ten",
+            city="Tel Aviv",
+            address="1 Main St",
+            is_active="true",
+        )
+
+        self.assertEqual(record.source_row_number, 7)
+        self.assertEqual(record.chain_code, "CH01")
+        self.assertEqual(record.chain_name, "Chain One")
+        self.assertEqual(record.store_code, "ST10")
+        self.assertEqual(record.store_name, "Store Ten")
+        self.assertEqual(record.city, "Tel Aviv")
+        self.assertEqual(record.address, "1 Main St")
+        self.assertEqual(record.is_active, "true")
 
 
 class TestFileFormatDetection(unittest.TestCase):
@@ -129,17 +151,13 @@ class TestParsingSummaryAndErrors(unittest.TestCase):
 
 
 class TestProductAndPriceFileParsing(unittest.TestCase):
-    def _write_temp_file(self, suffix: str, content: str) -> str:
-        with tempfile.NamedTemporaryFile("w", suffix=suffix, encoding="utf-8", delete=False) as handle:
-            handle.write(content)
-            return handle.name
+    FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "parser"
+
+    def _fixture_path(self, name: str) -> Path:
+        return self.FIXTURES_DIR / name
 
     def test_parse_products_file_csv_success_with_normalization(self) -> None:
-        file_path = self._write_temp_file(
-            ".csv",
-            "barcode,product_name,brand,unit_name\n"
-            "7290012345678,  Milk   1L  ,  DairyCo  , 1L \n",
-        )
+        file_path = self._fixture_path("products_valid.csv")
 
         records, summary, errors = parse_products_file(file_path)
 
@@ -154,13 +172,7 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertTrue(errors.is_empty())
 
     def test_parse_prices_file_json_success(self) -> None:
-        file_path = self._write_temp_file(
-            ".json",
-            "["
-            '{"chain_code": "CH01", "store_code": "ST10", "barcode": "7290012345678", '
-            '"price": "12.50", "currency": "ILS", "price_date": "2026-04-09"}'
-            "]",
-        )
+        file_path = self._fixture_path("prices_valid.json")
 
         records, summary, errors = parse_prices_file(file_path)
 
@@ -176,11 +188,7 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertTrue(errors.is_empty())
 
     def test_parse_products_file_tracks_invalid_row(self) -> None:
-        file_path = self._write_temp_file(
-            ".csv",
-            "barcode,product_name\n"
-            "not-a-barcode,Milk\n",
-        )
+        file_path = self._fixture_path("products_invalid_barcode.csv")
 
         records, summary, errors = parse_products_file(file_path)
 
@@ -192,13 +200,7 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertEqual(errors.errors[0].field_name, "barcode")
 
     def test_parse_prices_file_tracks_invalid_row(self) -> None:
-        file_path = self._write_temp_file(
-            ".json",
-            "["
-            '{"chain_code": "CH01", "store_code": "", "barcode": "7290012345678", '
-            '"price": "11.90", "currency": "ILS", "price_date": "2026-04-09"}'
-            "]",
-        )
+        file_path = self._fixture_path("prices_invalid_store.json")
 
         records, summary, errors = parse_prices_file(file_path)
 
@@ -209,22 +211,57 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertEqual(errors.errors[0].field_name, "store_code")
 
     def test_parse_products_file_raises_for_malformed_json_content(self) -> None:
-        file_path = self._write_temp_file(".json", "not-json")
+        file_path = self._fixture_path("products_malformed.json")
 
         with self.assertRaisesRegex(MalformedFileContentError, "malformed JSON content"):
             parse_products_file(file_path)
 
     def test_parse_prices_file_raises_for_malformed_content(self) -> None:
-        file_path = self._write_temp_file(".csv", "")
+        file_path = self._fixture_path("prices_missing_header.csv")
 
         with self.assertRaisesRegex(MalformedFileContentError, "header row"):
             parse_prices_file(file_path)
 
     def test_parse_products_file_unsupported_format(self) -> None:
-        file_path = self._write_temp_file(".xml", "<products></products>")
+        file_path = self._fixture_path("unsupported_products.xml")
 
         with self.assertRaisesRegex(UnsupportedFileFormatError, "unsupported file format"):
             parse_products_file(file_path)
+
+    def test_parse_stores_file_csv_success(self) -> None:
+        file_path = self._write_temp_file(
+            ".csv",
+            "chain_code,chain_name,store_code,store_name,city,address,is_active\n"
+            "CH01,Chain One,ST10, Store Ten , Tel Aviv , 1 Main St , true \n",
+        )
+
+        records, summary, errors = parse_stores_file(file_path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].chain_code, "CH01")
+        self.assertEqual(records[0].chain_name, "Chain One")
+        self.assertEqual(records[0].store_code, "ST10")
+        self.assertEqual(records[0].store_name, "Store Ten")
+        self.assertEqual(records[0].city, "Tel Aviv")
+        self.assertEqual(records[0].address, "1 Main St")
+        self.assertEqual(records[0].is_active, "true")
+        self.assertEqual(summary.accepted_rows, 1)
+        self.assertEqual(summary.rejected_rows, 0)
+        self.assertTrue(errors.is_empty())
+
+    def test_parse_stores_file_tracks_invalid_row(self) -> None:
+        file_path = self._write_temp_file(
+            ".json",
+            '[{"chain_code": "CH01", "store_code": "ST10", "store_name": "Store Ten"}]',
+        )
+
+        records, summary, errors = parse_stores_file(file_path)
+
+        self.assertEqual(records, [])
+        self.assertEqual(summary.accepted_rows, 0)
+        self.assertEqual(summary.rejected_rows, 1)
+        self.assertEqual(errors.count, 1)
+        self.assertEqual(errors.errors[0].field_name, "chain_name")
 
 
 class TestPriceDataLoader(unittest.TestCase):
@@ -337,6 +374,30 @@ class TestPriceDataLoader(unittest.TestCase):
         self.assertEqual(rows, [("S2",)])
         self.assertEqual(append_result.accepted_count, 1)
         self.assertEqual(replace_result.accepted_count, 1)
+
+    def test_load_stores_with_real_parser_path(self) -> None:
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", encoding="utf-8", delete=False) as handle:
+            handle.write(
+                "chain_code,chain_name,store_code,store_name,city,address,is_active\n"
+                "CH1,Chain One,S1,Store One,City A,Address A,true\n"
+            )
+            file_path = handle.name
+
+        result = self.loader.load_stores(file_path, mode="append")
+
+        chain_row = self.connection.execute(
+            "SELECT chain_code, name FROM chains WHERE chain_code = ?",
+            ("CH1",),
+        ).fetchone()
+        store_row = self.connection.execute(
+            "SELECT store_code, name, city, address, is_active FROM stores WHERE store_code = ?",
+            ("S1",),
+        ).fetchone()
+        self.assertEqual(chain_row, ("CH1", "Chain One"))
+        self.assertEqual(store_row, ("S1", "Store One", "City A", "Address A", 1))
+        self.assertEqual(result.accepted_count, 2)
+        self.assertEqual(result.rejected_count, 0)
+        self.assertTrue(result.success)
 
     def test_load_prices_accepts_valid_rows_and_rejects_missing_relations(self) -> None:
         self.connection.execute(

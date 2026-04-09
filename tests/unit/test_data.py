@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -129,17 +128,13 @@ class TestParsingSummaryAndErrors(unittest.TestCase):
 
 
 class TestProductAndPriceFileParsing(unittest.TestCase):
-    def _write_temp_file(self, suffix: str, content: str) -> str:
-        with tempfile.NamedTemporaryFile("w", suffix=suffix, encoding="utf-8", delete=False) as handle:
-            handle.write(content)
-            return handle.name
+    FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "parser"
+
+    def _fixture_path(self, name: str) -> Path:
+        return self.FIXTURES_DIR / name
 
     def test_parse_products_file_csv_success_with_normalization(self) -> None:
-        file_path = self._write_temp_file(
-            ".csv",
-            "barcode,product_name,brand,unit_name\n"
-            "7290012345678,  Milk   1L  ,  DairyCo  , 1L \n",
-        )
+        file_path = self._fixture_path("products_valid.csv")
 
         records, summary, errors = parse_products_file(file_path)
 
@@ -154,13 +149,7 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertTrue(errors.is_empty())
 
     def test_parse_prices_file_json_success(self) -> None:
-        file_path = self._write_temp_file(
-            ".json",
-            "["
-            '{"chain_code": "CH01", "store_code": "ST10", "barcode": "7290012345678", '
-            '"price": "12.50", "currency": "ILS", "price_date": "2026-04-09"}'
-            "]",
-        )
+        file_path = self._fixture_path("prices_valid.json")
 
         records, summary, errors = parse_prices_file(file_path)
 
@@ -176,11 +165,7 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertTrue(errors.is_empty())
 
     def test_parse_products_file_tracks_invalid_row(self) -> None:
-        file_path = self._write_temp_file(
-            ".csv",
-            "barcode,product_name\n"
-            "not-a-barcode,Milk\n",
-        )
+        file_path = self._fixture_path("products_invalid_barcode.csv")
 
         records, summary, errors = parse_products_file(file_path)
 
@@ -192,13 +177,7 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertEqual(errors.errors[0].field_name, "barcode")
 
     def test_parse_prices_file_tracks_invalid_row(self) -> None:
-        file_path = self._write_temp_file(
-            ".json",
-            "["
-            '{"chain_code": "CH01", "store_code": "", "barcode": "7290012345678", '
-            '"price": "11.90", "currency": "ILS", "price_date": "2026-04-09"}'
-            "]",
-        )
+        file_path = self._fixture_path("prices_invalid_store.json")
 
         records, summary, errors = parse_prices_file(file_path)
 
@@ -209,19 +188,19 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertEqual(errors.errors[0].field_name, "store_code")
 
     def test_parse_products_file_raises_for_malformed_json_content(self) -> None:
-        file_path = self._write_temp_file(".json", "not-json")
+        file_path = self._fixture_path("products_malformed.json")
 
         with self.assertRaisesRegex(MalformedFileContentError, "malformed JSON content"):
             parse_products_file(file_path)
 
     def test_parse_prices_file_raises_for_malformed_content(self) -> None:
-        file_path = self._write_temp_file(".csv", "")
+        file_path = self._fixture_path("prices_missing_header.csv")
 
         with self.assertRaisesRegex(MalformedFileContentError, "header row"):
             parse_prices_file(file_path)
 
     def test_parse_products_file_unsupported_format(self) -> None:
-        file_path = self._write_temp_file(".xml", "<products></products>")
+        file_path = self._fixture_path("unsupported_products.xml")
 
         with self.assertRaisesRegex(UnsupportedFileFormatError, "unsupported file format"):
             parse_products_file(file_path)

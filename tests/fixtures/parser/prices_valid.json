@@ -1,0 +1,10 @@
+[
+  {
+    "chain_code": "CH01",
+    "store_code": "ST10",
+    "barcode": "7290012345678",
+    "price": "12.50",
+    "currency": "ILS",
+    "price_date": "2026-04-09"
+  }
+]

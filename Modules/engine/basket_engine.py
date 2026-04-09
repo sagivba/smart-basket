@@ -16,6 +16,7 @@ from Modules.models.results import (
     ChainComparisonResult,
     MatchStatus,
 )
+from Modules.utils.text_utils import normalize_product_name
 
 
 class BasketEngine:

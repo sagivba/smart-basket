@@ -31,17 +31,17 @@
 - [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
-- [ ] Implement product upsert
-- [ ] Implement lookup by barcode
-- [ ] Implement lookup by normalized name
-- [ ] Implement retrieval by product IDs
-- [ ] Add repository unit tests
+- [x] Implement product upsert
+- [x] Implement lookup by barcode
+- [x] Implement lookup by normalized name
+- [x] Implement retrieval by product IDs
+- [x] Add repository unit tests
 
 ## 7. ChainRepository and StoreRepository
-- [ ] Implement chain upsert and lookup operations
-- [ ] Implement store upsert and lookup operations
-- [ ] Implement retrieval of stores by chain
-- [ ] Add repository unit tests
+- [x] Implement chain upsert and lookup operations
+- [x] Implement store upsert and lookup operations
+- [x] Implement retrieval of stores by chain
+- [x] Add repository unit tests
 
 ## 8. PriceRepository
 - [x] Implement price upsert
@@ -78,17 +78,17 @@
 - [x] Add loader unit tests
 
 ## 13. Barcode-based product matching
-- [ ] Implement direct product matching by barcode *(partial: matching methods are implemented in engine, but dedicated matching unit tests are still missing)*
-- [ ] Mark unknown barcode items as unmatched *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Return a consistent matching result structure *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Add matching unit tests
+- [x] Implement direct product matching by barcode *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Mark unknown barcode items as unmatched *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Return a consistent matching result structure *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Add matching unit tests
 
 ## 14. Name-based product matching
-- [ ] Implement normalized-name product matching *(partial: matching methods are implemented in engine, but dedicated matching unit tests are still missing)*
-- [ ] Return a single match for unambiguous results *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Return candidate lists for ambiguous matches *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Mark unknown names as unmatched *(partial: implemented in engine matching methods; dedicated matching unit tests are still missing)*
-- [ ] Add matching unit tests
+- [x] Implement normalized-name product matching *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Return a single match for unambiguous results *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Return candidate lists for ambiguous matches *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Mark unknown names as unmatched *(covered by unit tests in `tests/unit/test_engine.py`)*
+- [x] Add matching unit tests
 
 ## 15. Basket calculation
 - [x] Implement basket item validation before calculation
@@ -138,7 +138,7 @@
 ## 21. Unit tests by module
 - [x] Complete `test_models.py`
 - [x] Complete `test_utils.py` *(text utility coverage added)*
-- [x] Complete `test_db.py` *(BasketRepository coverage added)*
+- [x] Complete `test_db.py` *(BasketRepository + ChainRepository + StoreRepository coverage added)*
 - [x] Complete `test_data.py` *(parser infrastructure coverage added)*
 - [x] Complete `test_engine.py` *(engine result-building and validation paths covered)*
 - [x] Complete `test_app.py` *(application-layer orchestration coverage added)*

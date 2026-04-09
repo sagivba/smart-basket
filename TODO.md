@@ -139,8 +139,8 @@
 - [x] Complete `test_models.py`
 - [x] Complete `test_utils.py` *(text utility coverage added)*
 - [x] Complete `test_db.py` *(BasketRepository coverage added)*
-- [x] Complete `test_data.py` *(parser infrastructure + loader coverage added)*
-- [x] Complete `test_engine.py`
+- [x] Complete `test_data.py` *(parser infrastructure coverage added)*
+- [x] Complete `test_engine.py` *(engine result-building and validation paths covered)*
 - [x] Complete `test_app.py` *(application-layer orchestration coverage added)*
 - [ ] Ensure all new behavior is covered with `unittest` only
 

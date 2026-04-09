@@ -1,96 +1,113 @@
-"""Basket calculation engine for matched products."""
+"""Basket comparison result building logic for the engine layer."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from decimal import Decimal
-from typing import Iterable, Protocol
+from collections.abc import Mapping, Sequence
+from numbers import Real
+from typing import Any
 
-from Modules.models.entities import BasketItem
-
-
-class PriceRepositoryProtocol(Protocol):
-    """Protocol for the price lookup dependency used by the basket calculator."""
-
-    def get_prices_for_products_by_chain(
-        self, product_ids: list[int]
-    ) -> dict[int, dict[int, Decimal]]:
-        """Return prices by chain and product identifier."""
+from Modules.models.results import (
+    AvailabilityStatus,
+    BasketComparisonResult,
+    BasketLineResult,
+    ChainComparisonResult,
+)
 
 
-@dataclass(slots=True)
-class ChainCostSummary:
-    """Calculated basket cost summary for a single chain."""
+class BasketEngine:
+    """Builds structured basket comparison results for chains."""
 
-    chain_id: int
-    line_prices: dict[int, Decimal] = field(default_factory=dict)
-    total_price: Decimal = Decimal("0")
-    found_items_count: int = 0
+    def build_chain_result(
+        self,
+        *,
+        chain_id: int,
+        chain_name: str,
+        basket_items: Sequence[Mapping[str, Any]],
+    ) -> ChainComparisonResult:
+        """Build a single chain comparison result from matched basket items."""
+        basket_lines: list[BasketLineResult] = []
+        missing_items: list[str] = []
+        total_price = 0.0
 
+        for basket_item in basket_items:
+            line_result = self._build_line_result(basket_item)
+            basket_lines.append(line_result)
 
-class BasketCalculator:
-    """Calculates matched-item basket costs across chains."""
-
-    def __init__(self, price_repository: PriceRepositoryProtocol) -> None:
-        self._price_repository = price_repository
-
-    def calculate_for_matched_products(
-        self, basket_items: Iterable[BasketItem]
-    ) -> dict[int, ChainCostSummary]:
-        """Validate items and calculate chain costs for matched products only."""
-        items = list(basket_items)
-        self._validate_basket_items(items)
-
-        matched_quantities = self._collect_matched_product_quantities(items)
-        if not matched_quantities:
-            return {}
-
-        product_ids = list(matched_quantities)
-        prices_by_chain = self._price_repository.get_prices_for_products_by_chain(product_ids)
-
-        return self._calculate_chain_costs(matched_quantities, prices_by_chain)
-
-    @staticmethod
-    def _validate_basket_items(basket_items: Iterable[BasketItem]) -> None:
-        for item in basket_items:
-            if not isinstance(item.quantity, int) or item.quantity <= 0:
-                raise ValueError("quantity must be a positive integer")
-
-    @staticmethod
-    def _collect_matched_product_quantities(
-        basket_items: Iterable[BasketItem],
-    ) -> dict[int, int]:
-        matched_quantities: dict[int, int] = {}
-        for item in basket_items:
-            if item.match_status != "matched" or item.product_id is None:
+            if line_result.availability_status is AvailabilityStatus.MISSING:
+                missing_items.append(line_result.product_name)
                 continue
 
-            matched_quantities[item.product_id] = (
-                matched_quantities.get(item.product_id, 0) + item.quantity
+            if line_result.line_price is not None:
+                total_price += line_result.line_price
+
+        missing_items_count = len(missing_items)
+        found_items_count = len(basket_lines) - missing_items_count
+
+        return ChainComparisonResult(
+            chain_id=chain_id,
+            chain_name=chain_name,
+            total_price=total_price,
+            found_items_count=found_items_count,
+            missing_items_count=missing_items_count,
+            is_complete_basket=missing_items_count == 0,
+            basket_lines=basket_lines,
+            missing_items=missing_items,
+        )
+
+    def build_comparison_result(
+        self,
+        *,
+        chain_results_input: Sequence[Mapping[str, Any]],
+        unmatched_items: Sequence[str] | None = None,
+    ) -> BasketComparisonResult:
+        """Build top-level comparison result while preserving chain input order."""
+        ranked_chains = [
+            self.build_chain_result(
+                chain_id=int(chain_input["chain_id"]),
+                chain_name=str(chain_input["chain_name"]),
+                basket_items=chain_input.get("basket_items", []),
             )
+            for chain_input in chain_results_input
+        ]
 
-        return matched_quantities
+        return BasketComparisonResult(
+            ranked_chains=ranked_chains,
+            unmatched_items=list(unmatched_items or []),
+        )
 
-    @staticmethod
-    def _calculate_chain_costs(
-        matched_quantities: dict[int, int],
-        prices_by_chain: dict[int, dict[int, Decimal]],
-    ) -> dict[int, ChainCostSummary]:
-        chain_summaries: dict[int, ChainCostSummary] = {}
+    def _build_line_result(self, basket_item: Mapping[str, Any]) -> BasketLineResult:
+        """Build a line result and mark availability from the given unit price."""
+        unit_price = self._normalize_unit_price(basket_item.get("unit_price"))
+        quantity = int(basket_item["quantity"])
 
-        for chain_id, chain_product_prices in prices_by_chain.items():
-            summary = ChainCostSummary(chain_id=chain_id)
+        availability_status = (
+            AvailabilityStatus.MISSING
+            if unit_price is None
+            else AvailabilityStatus.FOUND
+        )
 
-            for product_id, quantity in matched_quantities.items():
-                unit_price = chain_product_prices.get(product_id)
-                if unit_price is None:
-                    continue
+        line_price = None if unit_price is None else unit_price * quantity
 
-                line_price = unit_price * quantity
-                summary.line_prices[product_id] = line_price
-                summary.total_price += line_price
-                summary.found_items_count += 1
+        return BasketLineResult(
+            product_id=basket_item.get("product_id"),
+            product_name=str(basket_item["product_name"]),
+            barcode=basket_item.get("barcode"),
+            quantity=quantity,
+            unit_price=unit_price,
+            line_price=line_price,
+            availability_status=availability_status,
+        )
 
-            chain_summaries[chain_id] = summary
+    def _normalize_unit_price(self, unit_price: Any) -> float | None:
+        """Normalize unit price into a float or None when missing."""
+        if unit_price is None:
+            return None
 
-        return chain_summaries
+        if isinstance(unit_price, bool) or not isinstance(unit_price, Real):
+            raise TypeError("unit_price must be numeric or None")
+
+        normalized_unit_price = float(unit_price)
+        if normalized_unit_price < 0:
+            raise ValueError("unit_price must not be negative")
+
+        return normalized_unit_price

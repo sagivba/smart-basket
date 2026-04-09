@@ -98,12 +98,12 @@
 - [x] Add calculation unit tests
 
 ## 16. Missing item handling and structured result building
-- [ ] Mark missing products per chain
-- [ ] Implement `missing_items` collection
-- [ ] Implement `is_complete_basket`
-- [ ] Build `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
-- [ ] Return `unmatched_items` separately
-- [ ] Add unit tests
+- [x] Mark missing products per chain
+- [x] Implement `missing_items` collection
+- [x] Implement `is_complete_basket`
+- [x] Build `BasketLineResult`, `ChainComparisonResult`, and `BasketComparisonResult`
+- [x] Return `unmatched_items` separately
+- [x] Add unit tests
 
 ## 17. Chain ranking and comparison service
 - [x] Implement `BasketCalculator` integration into comparison flow
@@ -140,7 +140,7 @@
 - [x] Complete `test_utils.py` *(text utility coverage added)*
 - [x] Complete `test_db.py` *(BasketRepository coverage added)*
 - [x] Complete `test_data.py` *(parser infrastructure coverage added)*
-- [x] Complete `test_engine.py` *(barcode matching coverage added)*
+- [x] Complete `test_engine.py` *(engine result-building coverage added)*
 - [ ] Complete `test_app.py` *(partial: file exists, currently empty)*
 - [ ] Ensure all new behavior is covered with `unittest` only
 

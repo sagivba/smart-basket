@@ -145,6 +145,174 @@ class TestDatabaseManager(unittest.TestCase):
                 self.assertEqual(count, 5)
 
 
+class TestChainRepository(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database_path = Path(self.temp_dir.name) / "chains.db"
+        self.connection = sqlite3.connect(str(self.database_path))
+        create_schema(self.connection)
+        self.repository = ChainRepository(self.connection)
+
+    def tearDown(self) -> None:
+        self.connection.close()
+        self.temp_dir.cleanup()
+
+    def test_upsert_chain_inserts_then_updates_by_chain_code(self) -> None:
+        created = self.repository.upsert_chain(Chain(id=None, chain_code="C-001", name="Chain One"))
+        updated = self.repository.upsert_chain(
+            Chain(id=None, chain_code="C-001", name="Chain One Renamed")
+        )
+
+        self.assertEqual(created.id, updated.id)
+        self.assertEqual(updated.name, "Chain One Renamed")
+
+        row_count = self.connection.execute(
+            "SELECT COUNT(*) FROM chains WHERE chain_code = 'C-001'"
+        ).fetchone()[0]
+        self.assertEqual(row_count, 1)
+
+    def test_get_by_id_returns_chain_or_none(self) -> None:
+        created = self.repository.upsert_chain(Chain(id=None, chain_code="C-002", name="Chain Two"))
+
+        found = self.repository.get_by_id(created.id)
+        missing = self.repository.get_by_id(9999)
+
+        self.assertIsNotNone(found)
+        self.assertEqual(found.chain_code, "C-002")
+        self.assertIsNone(missing)
+
+    def test_get_by_chain_code_returns_chain_or_none(self) -> None:
+        self.repository.upsert_chain(Chain(id=None, chain_code="C-003", name="Chain Three"))
+
+        found = self.repository.get_by_chain_code("C-003")
+        missing = self.repository.get_by_chain_code("UNKNOWN")
+
+        self.assertIsNotNone(found)
+        self.assertEqual(found.name, "Chain Three")
+        self.assertIsNone(missing)
+
+
+class TestStoreRepository(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.database_path = Path(self.temp_dir.name) / "stores.db"
+        self.connection = sqlite3.connect(str(self.database_path))
+        create_schema(self.connection)
+        self.chain_repository = ChainRepository(self.connection)
+        self.repository = StoreRepository(self.connection)
+
+        self.chain_a = self.chain_repository.upsert_chain(
+            Chain(id=None, chain_code="CHAIN-A", name="Chain A")
+        )
+        self.chain_b = self.chain_repository.upsert_chain(
+            Chain(id=None, chain_code="CHAIN-B", name="Chain B")
+        )
+
+    def tearDown(self) -> None:
+        self.connection.close()
+        self.temp_dir.cleanup()
+
+    def test_upsert_store_inserts_then_updates_by_chain_and_store_code(self) -> None:
+        created = self.repository.upsert_store(
+            Store(
+                id=None,
+                chain_id=self.chain_a.id,
+                store_code="A-1",
+                name="Store A1",
+                city="Tel Aviv",
+                address="Street 1",
+                is_active=True,
+            )
+        )
+        updated = self.repository.upsert_store(
+            Store(
+                id=None,
+                chain_id=self.chain_a.id,
+                store_code="A-1",
+                name="Store A1 Updated",
+                city="Haifa",
+                address="Street 99",
+                is_active=False,
+            )
+        )
+
+        self.assertEqual(created.id, updated.id)
+        self.assertFalse(updated.is_active)
+
+        row = self.connection.execute(
+            "SELECT name, city, address, is_active FROM stores WHERE id = ?",
+            (updated.id,),
+        ).fetchone()
+        self.assertEqual(row, ("Store A1 Updated", "Haifa", "Street 99", 0))
+
+    def test_get_by_id_returns_store_or_none(self) -> None:
+        created = self.repository.upsert_store(
+            Store(
+                id=None,
+                chain_id=self.chain_a.id,
+                store_code="A-2",
+                name="Store A2",
+            )
+        )
+
+        found = self.repository.get_by_id(created.id)
+        missing = self.repository.get_by_id(9999)
+
+        self.assertIsNotNone(found)
+        self.assertEqual(found.store_code, "A-2")
+        self.assertTrue(found.is_active)
+        self.assertIsNone(missing)
+
+    def test_get_by_chain_and_store_code_returns_store_or_none(self) -> None:
+        self.repository.upsert_store(
+            Store(
+                id=None,
+                chain_id=self.chain_a.id,
+                store_code="A-3",
+                name="Store A3",
+            )
+        )
+
+        found = self.repository.get_by_chain_and_store_code(self.chain_a.id, "A-3")
+        missing = self.repository.get_by_chain_and_store_code(self.chain_b.id, "A-3")
+
+        self.assertIsNotNone(found)
+        self.assertEqual(found.name, "Store A3")
+        self.assertIsNone(missing)
+
+    def test_get_stores_by_chain_returns_only_requested_chain_in_id_order(self) -> None:
+        store_a2 = self.repository.upsert_store(
+            Store(
+                id=None,
+                chain_id=self.chain_a.id,
+                store_code="A-2",
+                name="Store A2",
+            )
+        )
+        store_a1 = self.repository.upsert_store(
+            Store(
+                id=None,
+                chain_id=self.chain_a.id,
+                store_code="A-1",
+                name="Store A1",
+            )
+        )
+        self.repository.upsert_store(
+            Store(
+                id=None,
+                chain_id=self.chain_b.id,
+                store_code="B-1",
+                name="Store B1",
+            )
+        )
+
+        stores = self.repository.get_stores_by_chain(self.chain_a.id)
+
+        self.assertEqual([store.id for store in stores], [store_a2.id, store_a1.id])
+        self.assertTrue(all(store.chain_id == self.chain_a.id for store in stores))
+
+
+
 class TestBasketRepository(unittest.TestCase):
     def setUp(self) -> None:
         self.connection = sqlite3.connect(":memory:")

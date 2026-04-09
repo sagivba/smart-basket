@@ -11,8 +11,6 @@ class BasketRepository:
     """Persistence operations for basket items."""
 
     def __init__(self, connection: sqlite3.Connection) -> None:
-        if not isinstance(connection, sqlite3.Connection):
-            raise TypeError("connection must be a sqlite3.Connection")
         self._connection = connection
 
     def add_item(self, item: BasketItem) -> BasketItem:

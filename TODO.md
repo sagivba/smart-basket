@@ -57,11 +57,11 @@
 - [x] Add repository unit tests
 
 ## 10. Parser core infrastructure
-- [ ] Implement parsing models such as `ParsedProductRecord` and `ParsedPriceRecord`
-- [ ] Implement `FileParser`
-- [ ] Implement file format detection
-- [ ] Implement parsing summary and error collection structures
-- [ ] Add parser infrastructure unit tests
+- [x] Implement parsing models such as `ParsedProductRecord` and `ParsedPriceRecord`
+- [x] Implement `FileParser`
+- [x] Implement file format detection
+- [x] Implement parsing summary and error collection structures
+- [x] Add parser infrastructure unit tests
 
 ## 11. Product, store, and price file parsing
 - [ ] Implement `parse_products_file()`
@@ -139,7 +139,7 @@
 - [x] Complete `test_models.py`
 - [x] Complete `test_utils.py` *(text utility coverage added)*
 - [x] Complete `test_db.py` *(BasketRepository coverage added)*
-- [ ] Complete `test_data.py` *(partial: file exists, currently empty)*
+- [x] Complete `test_data.py` *(parser infrastructure coverage added)*
 - [ ] Complete `test_engine.py` *(partial: file exists, currently empty)*
 - [ ] Complete `test_app.py` *(partial: file exists, currently empty)*
 - [ ] Ensure all new behavior is covered with `unittest` only

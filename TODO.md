@@ -71,11 +71,11 @@
 - [ ] Add parsing unit tests with deterministic fixtures
 
 ## 12. Data loader orchestration
-- [ ] Implement `LoadJob` and `LoadResult`
-- [ ] Implement `PriceDataLoader`
-- [ ] Implement `load_products()`, `load_prices()`, and `load_stores()`
-- [ ] Implement `replace` and `append` loading modes
-- [ ] Add loader unit tests
+- [x] Implement `LoadJob` and `LoadResult`
+- [x] Implement `PriceDataLoader`
+- [x] Implement `load_products()`, `load_prices()`, and `load_stores()`
+- [x] Implement `replace` and `append` loading modes
+- [x] Add loader unit tests
 
 ## 13. Barcode-based product matching
 - [ ] Implement direct product matching by barcode

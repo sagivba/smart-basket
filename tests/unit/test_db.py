@@ -458,6 +458,21 @@ class TestBasketRepository(unittest.TestCase):
 
         self.assertEqual(row, (301, 22, "new milk", "barcode", 3, "matched"))
 
+
+    def test_update_item_raises_when_identifier_missing(self) -> None:
+        item_without_id = BasketItem(
+            id=None,
+            basket_id=300,
+            product_id=21,
+            input_value="milk",
+            input_type="name",
+            quantity=1,
+            match_status="matched",
+        )
+
+        with self.assertRaisesRegex(ValueError, "item.id is required for update"):
+            self.repository.update_item(item_without_id)
+
     def test_delete_item_removes_only_targeted_row(self) -> None:
         first = self.repository.add_item(
             self._make_item(

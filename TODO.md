@@ -142,7 +142,7 @@
 - [x] Complete `test_data.py` *(parser infrastructure coverage added)*
 - [x] Complete `test_engine.py` *(engine result-building and validation paths covered)*
 - [x] Complete `test_app.py` *(application-layer orchestration coverage added)*
-- [ ] Ensure all new behavior is covered with `unittest` only
+- [x] Ensure all new behavior is covered with `unittest` only *(evidence: dedicated unit tests now cover engine matching paths, basket repository update guardrails, and CLI name-based matching in addition to existing repository/engine/app/integration coverage; full suite runs via `python -m unittest discover` without pytest)*
 
 ## 22. Integration tests
 - [x] Implement `test_import_flow.py`

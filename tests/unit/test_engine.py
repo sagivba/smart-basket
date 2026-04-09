@@ -251,6 +251,22 @@ class TestBasketEngineBarcodeMatching(unittest.TestCase):
         self.assertIsNone(result["product_name"])
         self.assertEqual(result["barcode"], "0000000000000")
 
+    def test_match_input_item_by_barcode_rejects_non_string_barcode(self) -> None:
+        with self.assertRaises(TypeError):
+            self.engine.match_input_item_by_barcode(
+                barcode=123456789,
+                quantity=1,
+                products_by_barcode={},
+            )
+
+    def test_match_input_item_by_barcode_rejects_non_positive_quantity(self) -> None:
+        with self.assertRaises(ValueError):
+            self.engine.match_input_item_by_barcode(
+                barcode="1234567890123",
+                quantity=0,
+                products_by_barcode={},
+            )
+
     def test_match_basket_items_by_barcode_returns_consistent_structure(self) -> None:
         match_output = self.engine.match_basket_items_by_barcode(
             basket_items=[

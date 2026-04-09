@@ -26,19 +26,15 @@ class BasketEngine:
         products_by_barcode: Mapping[str, Mapping[str, Any]],
     ) -> dict[str, Any]:
         """Match one barcode input item and return a stable match structure."""
-        normalized_barcode = str(barcode).strip()
-        if not normalized_barcode:
-            raise ValueError("barcode is required")
-
-        if not isinstance(quantity, int) or quantity <= 0:
-            raise ValueError("quantity must be a positive integer")
+        normalized_barcode = self._normalize_barcode(barcode)
+        normalized_quantity = self._validate_quantity(quantity)
 
         product = products_by_barcode.get(normalized_barcode)
         if product is None:
             return {
                 "input_type": "barcode",
                 "input_value": normalized_barcode,
-                "quantity": quantity,
+                "quantity": normalized_quantity,
                 "match_status": MatchStatus.UNMATCHED.value,
                 "product_id": None,
                 "product_name": None,
@@ -48,7 +44,7 @@ class BasketEngine:
         return {
             "input_type": "barcode",
             "input_value": normalized_barcode,
-            "quantity": quantity,
+            "quantity": normalized_quantity,
             "match_status": MatchStatus.MATCHED.value,
             "product_id": product.get("id"),
             "product_name": product.get("name"),
@@ -73,8 +69,8 @@ class BasketEngine:
 
         for basket_item in basket_items:
             match_result = self.match_input_item_by_barcode(
-                barcode=str(basket_item["input_value"]),
-                quantity=int(basket_item["quantity"]),
+                barcode=basket_item["input_value"],
+                quantity=basket_item["quantity"],
                 products_by_barcode=products_by_barcode,
             )
             matched_items.append(match_result)
@@ -85,6 +81,24 @@ class BasketEngine:
             "matched_items": matched_items,
             "unmatched_items": unmatched_items,
         }
+
+    def _normalize_barcode(self, barcode: Any) -> str:
+        """Return a trimmed barcode string."""
+        if not isinstance(barcode, str):
+            raise TypeError("barcode must be a string")
+
+        normalized_barcode = barcode.strip()
+        if not normalized_barcode:
+            raise ValueError("barcode is required")
+
+        return normalized_barcode
+
+    def _validate_quantity(self, quantity: Any) -> int:
+        """Validate that quantity is a positive integer."""
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
+            raise ValueError("quantity must be a positive integer")
+
+        return quantity
 
     def build_chain_result(
         self,

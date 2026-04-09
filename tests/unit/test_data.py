@@ -66,6 +66,10 @@ class TestFileFormatDetection(unittest.TestCase):
         with self.assertRaisesRegex(UnsupportedFileFormatError, "unsupported file format"):
             FileParser.detect_format("stores.xml")
 
+    def test_detect_format_missing_suffix_raises(self) -> None:
+        with self.assertRaisesRegex(UnsupportedFileFormatError, "<none>"):
+            FileParser.detect_format("prices")
+
 
 class TestParsingSummaryAndErrors(unittest.TestCase):
     def test_create_summary_tracks_minimal_outcomes(self) -> None:
@@ -79,9 +83,10 @@ class TestParsingSummaryAndErrors(unittest.TestCase):
         self.assertEqual(summary.total_rows, 0)
         self.assertEqual(summary.warnings, [])
 
-        summary.accepted_rows += 2
-        summary.rejected_rows += 1
-        summary.warnings.append("empty optional brand on row 3")
+        summary.record_accepted()
+        summary.record_accepted()
+        summary.record_rejected()
+        summary.add_warning("empty optional brand on row 3")
 
         self.assertEqual(summary.total_rows, 3)
         self.assertEqual(summary.warnings, ["empty optional brand on row 3"])
@@ -104,6 +109,16 @@ class TestParsingSummaryAndErrors(unittest.TestCase):
         self.assertFalse(collection.is_empty())
         self.assertEqual(collection.count, 1)
         self.assertEqual(collection.errors[0], error)
+
+    def test_error_collection_extend_preserves_order(self) -> None:
+        collection = FileParser.create_error_collection()
+        first = ParsingError(row_number=1, field_name="barcode", message="required")
+        second = ParsingError(row_number=2, field_name="price", message="invalid")
+
+        collection.extend([first, second])
+
+        self.assertEqual(collection.count, 2)
+        self.assertEqual(collection.errors, [first, second])
 
 
 if __name__ == "__main__":

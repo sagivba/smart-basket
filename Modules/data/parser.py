@@ -63,6 +63,10 @@ class ParsingErrorCollection:
         """Store one structured parsing error."""
         self.errors.append(error)
 
+    def extend(self, errors: list[ParsingError]) -> None:
+        """Store multiple parsing errors while preserving insertion order."""
+        self.errors.extend(errors)
+
     @property
     def count(self) -> int:
         """Return number of collected parsing errors."""
@@ -87,6 +91,18 @@ class ParsingSummary:
     def total_rows(self) -> int:
         """Return total processed rows."""
         return self.accepted_rows + self.rejected_rows
+
+    def record_accepted(self) -> None:
+        """Increment accepted row count by one."""
+        self.accepted_rows += 1
+
+    def record_rejected(self) -> None:
+        """Increment rejected row count by one."""
+        self.rejected_rows += 1
+
+    def add_warning(self, message: str) -> None:
+        """Store one summary warning message."""
+        self.warnings.append(message)
 
 
 class FileParser:

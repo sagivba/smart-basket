@@ -6,6 +6,7 @@ import csv
 import gzip
 import json
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, TypeVar
@@ -356,7 +357,7 @@ def _build_product_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPro
         row_number=row_number,
     )
     try:
-        barcode = validate_barcode(barcode_text)
+        barcode = validate_barcode(_normalize_barcode_value(barcode_text))
     except (TypeError, ValueError) as exc:
         raise _RowValidationError("barcode", str(exc), barcode_text) from exc
 
@@ -401,7 +402,7 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
         row_number=row_number,
     )
     try:
-        barcode = validate_barcode(barcode_text)
+        barcode = validate_barcode(_normalize_barcode_value(barcode_text))
     except (TypeError, ValueError) as exc:
         raise _RowValidationError("barcode", str(exc), barcode_text) from exc
 
@@ -411,18 +412,25 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
         target_field="price",
         row_number=row_number,
     )
-    currency = _get_required_field(
-        row,
-        ("currency",),
-        target_field="currency",
-        row_number=row_number,
+    currency = _normalize_code_value(
+        _get_required_field(
+            row,
+            ("currency",),
+            target_field="currency",
+            row_number=row_number,
+        )
     )
+
     price_date_text = _get_required_field(
         row,
         ("price_date", "price_date_text", "date", "pricedate", "updatedate"),
         target_field="price_date",
         row_number=row_number,
     )
+    try:
+        normalized_price_date = _normalize_price_date_value(price_date_text)
+    except ValueError as exc:
+        raise _RowValidationError("price_date", str(exc), price_date_text) from exc
 
     return ParsedPriceRecord(
         source_row_number=row_number,
@@ -431,7 +439,7 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
         barcode=barcode,
         price_text=price_text,
         currency=currency,
-        price_date_text=price_date_text,
+        price_date_text=normalized_price_date,
     )
 
 

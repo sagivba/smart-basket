@@ -348,11 +348,15 @@ class DataImportRepository:
         price_date: str,
         source_file: str,
     ) -> None:
-        """Insert one price row."""
+        """Insert or update one price row by the MVP natural key."""
         self._connection.execute(
             """
             INSERT INTO prices (product_id, chain_id, store_id, price, currency, price_date, source_file)
             VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(product_id, chain_id, store_id, currency, price_date)
+            DO UPDATE SET
+                price = excluded.price,
+                source_file = excluded.source_file
             """,
             (product_id, chain_id, store_id, price, currency, price_date, source_file),
         )

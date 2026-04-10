@@ -1,0 +1,18 @@
+<Root>
+  <Item>
+    <ChainId>7290058103393</ChainId>
+    <StoreId>001</StoreId>
+    <ItemCode>7290012345678</ItemCode>
+    <ItemPrice>6.90</ItemPrice>
+    <Currency>ILS</Currency>
+    <PriceDate>2026-04-09</PriceDate>
+  </Item>
+  <Item>
+    <ChainId>7290058103393</ChainId>
+    <StoreId>001</StoreId>
+    <ItemCode>7290098765432</ItemCode>
+    <ItemPrice>11.40</ItemPrice>
+    <Currency>ILS</Currency>
+    <PriceDate>2026-04-09</PriceDate>
+  </Item>
+</Root>

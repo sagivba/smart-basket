@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+import gzip
 from pathlib import Path
 import tempfile
 from unittest.mock import patch
@@ -12,6 +13,7 @@ from Modules.data.parser import (
     FileFormat,
     FileParser,
     MalformedFileContentError,
+    ParsingBatchSummary,
     ParsedPriceRecord,
     ParsedProductRecord,
     ParsedStoreRecord,
@@ -20,8 +22,10 @@ from Modules.data.parser import (
     ParsingSummary,
     UnsupportedFileFormatError,
     parse_prices_file,
+    parse_prices_file_batch,
     parse_products_file,
     parse_stores_file,
+    parse_stores_file_batch,
 )
 from Modules.db.database import create_schema
 
@@ -94,7 +98,13 @@ class TestFileFormatDetection(unittest.TestCase):
 
     def test_detect_format_unsupported_suffix_raises(self) -> None:
         with self.assertRaisesRegex(UnsupportedFileFormatError, "unsupported file format"):
-            FileParser.detect_format("stores.xml")
+            FileParser.detect_format("stores.txt")
+
+    def test_detect_format_xml_suffix(self) -> None:
+        self.assertEqual(FileParser.detect_format("stores.xml"), FileFormat.XML)
+
+    def test_detect_format_gzip_wrapped_xml_suffix(self) -> None:
+        self.assertEqual(FileParser.detect_format("stores.xml.gz"), FileFormat.XML)
 
     def test_detect_format_missing_suffix_raises(self) -> None:
         with self.assertRaisesRegex(UnsupportedFileFormatError, "<none>"):
@@ -232,7 +242,7 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
             parse_prices_file(file_path)
 
     def test_parse_products_file_unsupported_format(self) -> None:
-        file_path = self._fixture_path("unsupported_products.xml")
+        file_path = self._fixture_path("unsupported_products.txt")
 
         with self.assertRaisesRegex(UnsupportedFileFormatError, "unsupported file format"):
             parse_products_file(file_path)
@@ -264,6 +274,77 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertEqual(summary.rejected_rows, 1)
         self.assertEqual(errors.count, 1)
         self.assertEqual(errors.errors[0].field_name, "chain_name")
+
+    def test_parse_stores_file_xml_success_from_retailer_fixture(self) -> None:
+        file_path = self._fixture_path("stores_retailer_sample.xml")
+
+        records, summary, errors = parse_stores_file(file_path)
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0].chain_code, "7290058103393")
+        self.assertEqual(records[0].store_code, "001")
+        self.assertEqual(records[0].store_name, "Shufersal Deal")
+        self.assertEqual(records[1].city, "Ramat Gan")
+        self.assertEqual(summary.file_format, FileFormat.XML)
+        self.assertEqual(summary.accepted_rows, 2)
+        self.assertEqual(summary.rejected_rows, 0)
+        self.assertTrue(errors.is_empty())
+
+    def test_parse_prices_file_xml_gzip_success_from_retailer_fixture(self) -> None:
+        xml_file_path = self._fixture_path("prices_retailer_sample.xml")
+        compressed_file = tempfile.NamedTemporaryFile(
+            "wb",
+            suffix=".xml.gz",
+            delete=False,
+        )
+        with compressed_file:
+            with xml_file_path.open("rb") as source_file:
+                with gzip.GzipFile(fileobj=compressed_file, mode="wb") as gzip_file:
+                    gzip_file.write(source_file.read())
+        self.addCleanup(Path(compressed_file.name).unlink, missing_ok=True)
+        file_path = Path(compressed_file.name)
+
+        records, summary, errors = parse_prices_file(file_path)
+
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0].chain_code, "7290058103393")
+        self.assertEqual(records[0].store_code, "001")
+        self.assertEqual(records[0].barcode, "7290012345678")
+        self.assertEqual(records[0].price_text, "6.90")
+        self.assertEqual(records[0].price_date_text, "2026-04-09")
+        self.assertEqual(summary.file_format, FileFormat.XML)
+        self.assertEqual(summary.accepted_rows, 2)
+        self.assertEqual(summary.rejected_rows, 0)
+        self.assertTrue(errors.is_empty())
+
+    def test_parse_retailer_file_batches_builds_aggregate_summary(self) -> None:
+        store_paths = [
+            self._fixture_path("stores_retailer_sample.xml"),
+            self._fixture_path("stores_retailer_sample.xml"),
+        ]
+        price_paths = [
+            self._fixture_path("prices_retailer_sample.xml"),
+            self._fixture_path("prices_retailer_sample.xml"),
+        ]
+
+        store_records, store_batch_summary, store_errors = parse_stores_file_batch(store_paths)
+        price_records, price_batch_summary, price_errors = parse_prices_file_batch(price_paths)
+
+        self.assertEqual(len(store_records), 4)
+        self.assertIsInstance(store_batch_summary, ParsingBatchSummary)
+        self.assertEqual(store_batch_summary.batch_name, "stores")
+        self.assertEqual(store_batch_summary.file_count, 2)
+        self.assertEqual(store_batch_summary.accepted_rows, 4)
+        self.assertEqual(store_batch_summary.rejected_rows, 0)
+        self.assertEqual(store_errors.count, 0)
+
+        self.assertEqual(len(price_records), 4)
+        self.assertIsInstance(price_batch_summary, ParsingBatchSummary)
+        self.assertEqual(price_batch_summary.batch_name, "prices")
+        self.assertEqual(price_batch_summary.file_count, 2)
+        self.assertEqual(price_batch_summary.accepted_rows, 4)
+        self.assertEqual(price_batch_summary.rejected_rows, 0)
+        self.assertEqual(price_errors.count, 0)
 
 
 class TestPriceDataLoader(unittest.TestCase):

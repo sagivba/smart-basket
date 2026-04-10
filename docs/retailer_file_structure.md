@@ -96,7 +96,17 @@ These are often combined with chain identifiers, store identifiers, and date/tim
 - Compression/container format may vary by source and over time (**Inference**).
 - Public references are distributed across package docs, legal/regulatory pages, and organization repositories; detail depth differs across sources (**Confirmed fact**).
 
-## 8. Sources and references
+## 8. MVP promo parsing scope decision
+
+Decision for current MVP:
+- `PROMO_FILE` and `PROMO_FULL_FILE` parsing is **post-MVP scope**.
+
+Reasoning:
+- Current MVP comparison outputs are based on base item prices only (`stores` + `prices` + optional `products` enrichment).
+- Promo payload rules are materially more complex (time windows, conditional eligibility, quantity constraints) and would introduce business-rule logic outside current MVP scope.
+- Keeping promo parsing out of MVP preserves clean module boundaries and deterministic offline behavior while still allowing future extension.
+
+## 9. Sources and references
 
 1. `il-supermarket-parser` (PyPI project page): https://pypi.org/project/il-supermarket-parser/
 2. `il-supermarket-scraper` (PyPI project page): https://pypi.org/project/il-supermarket-scraper/

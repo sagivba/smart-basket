@@ -1,0 +1,20 @@
+<Root>
+  <Store>
+    <ChainId>7290058103393</ChainId>
+    <ChainName>Shufersal</ChainName>
+    <StoreId>001</StoreId>
+    <StoreName>Shufersal Deal</StoreName>
+    <CityName>Tel Aviv</CityName>
+    <Address>1 Herzl St</Address>
+    <IsActive>1</IsActive>
+  </Store>
+  <Store>
+    <ChainId>7290058103393</ChainId>
+    <ChainName>Shufersal</ChainName>
+    <StoreId>002</StoreId>
+    <StoreName>Shufersal Sheli</StoreName>
+    <CityName>Ramat Gan</CityName>
+    <Address>10 Bialik St</Address>
+    <IsActive>1</IsActive>
+  </Store>
+</Root>

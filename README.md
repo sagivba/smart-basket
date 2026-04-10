@@ -161,6 +161,25 @@ To keep documentation accurate, this README does **not** claim:
 - any non-local execution dependency.
 
 
+## Repository hygiene for local data
+
+To keep the repository safe and reviewable, never commit:
+- real downloaded retailer files under `data/raw/`
+- generated outputs under `data/generated/`
+- local SQLite database files and SQLite runtime sidecar files (`*.db`, `*.sqlite*`, `*-wal`, `*-shm`, `*-journal`)
+- local logs and runtime artifacts (`logs/`, `*.log`, `*.pid`, temp files)
+
+`data/samples/` is intentionally versioned for deterministic tests and examples.
+
+If local data was already tracked in Git before ignore rules were added, remove it from the index (without deleting your local files):
+
+```bash
+git rm -r --cached data/raw data/generated
+git rm --cached *.db *.sqlite *.sqlite3
+git commit -m "chore: stop tracking local runtime data"
+```
+
+
 ## Third-party attribution
 
 This repository includes an **optional** raw-download integration that depends on:

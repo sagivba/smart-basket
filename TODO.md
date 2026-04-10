@@ -137,12 +137,12 @@
 
 ## 21. Unit tests by module
 - [x] Complete `test_models.py`
-- [x] Complete `test_utils.py` *(text utility coverage added)*
-- [x] Complete `test_db.py` *(BasketRepository + ChainRepository + StoreRepository coverage added)*
-- [x] Complete `test_data.py` *(parser infrastructure coverage added)*
-- [x] Complete `test_engine.py` *(engine result-building and validation paths covered)*
-- [x] Complete `test_app.py` *(application-layer orchestration coverage added)*
-- [x] Ensure all new behavior is covered with `unittest` only *(evidence: dedicated unit tests now cover engine matching paths, basket repository update guardrails, and CLI name-based matching in addition to existing repository/engine/app/integration coverage; full suite runs via `python -m unittest discover` without pytest)*
+- [x] Complete `test_utils.py`
+- [x] Complete `test_db.py`
+- [x] Complete `test_data.py`
+- [x] Complete `test_engine.py`
+- [x] Complete `test_app.py`
+- [x] Ensure all new behavior is covered with `unittest` only
 
 ## 22. Integration tests
 - [x] Implement `test_import_flow.py`
@@ -163,14 +163,122 @@
 - [x] Update `module_guide.md` with layer boundaries and dependencies
 - [x] Update `test_strategy.md` with testing patterns and execution guidance
 - [x] Add GitHub Actions workflow to run `unittest` discovery on `push` and `pull_request`
-- [x] Document Python 3.12 compatibility expectation and verification trail *(README + test-strategy now document CI target, local test command, and evidence boundaries without over-claiming runtime guarantees)*
-- [x] Verify the system runs fully offline *(evidence: `tests/unit/test_offline_constraints.py` guardrails + `tests/integration/test_offline_bootstrap.py` executes load/add-item/compare while `socket.create_connection` and `socket.socket.connect` are patched to fail if any network access is attempted)*
-- [ ] Verify responsibilities remain cleanly separated across layers — **partial**: data-layer separation is implemented and evidence-backed (`PriceDataLoader` delegates product/store/price persistence through `DataImportRepository`, and `TestPriceDataLoaderLayerBoundaries` verifies delegation using a no-SQL connection + spy repository), but this checklist item remains broader than current automated evidence and is not yet validated as a full cross-layer invariant.
+- [x] Document Python 3.12 compatibility expectation and verification trail
+- [x] Verify the system runs fully offline
+- [ ] Verify responsibilities remain cleanly separated across layers
 
 ## 25. Open MVP decisions
-- [x] Representative chain price rule — **implemented**: repository queries pick the minimum store price per chain/product (deterministic tie-break), with unit-test coverage for single-price and multi-product map behavior.
-- [x] Ambiguous match handling policy — **implemented**: ambiguous name matches remain unresolved (`product_id=NULL`, `match_status="ambiguous"`), candidate product IDs are persisted in `basket_items.candidate_product_ids`, surfaced via app basket-state contracts, and printed by CLI add-item output without auto-selection (evidence: engine/db/app/cli unit coverage).
-- [x] Basket persistence policy — **implemented**: basket items are persisted in SQLite (`basket_items` schema + repository CRUD), and application/CLI flows read and write persisted basket state by `basket_id`.
-- [x] Partial-calculation policy for unmatched items — **implemented**: unmatched inputs are excluded from chain total calculations, returned separately as `unmatched_items`, and missing-per-chain reporting stays independent.
-- [x] CLI scope in MVP — **implemented**: a basic CLI entry point (`load`, `add-item`, `compare`) is present and covered by dedicated unit/integration tests.
-- [x] Promotion file scope (`Promo`/`PromoFull`) — **implemented as scope decision**: promotion files are explicitly ignored in MVP ingestion and basket pricing, and a post-MVP isolated ingestion/DB/feature-flag track is documented in `docs/system_spec.md` (section 2.10).
+- [x] Representative chain price rule implemented
+- [x] Ambiguous match handling policy implemented
+- [x] Basket persistence policy implemented
+- [x] Partial-calculation policy for unmatched items implemented
+- [x] CLI scope in MVP implemented
+
+## 26. Layer-boundary verification and architecture hardening
+- [ ] Verify `app` does not implement business logic that belongs in `engine`
+- [ ] Verify `engine` does not perform file I/O or direct parsing
+- [ ] Verify `data` does not contain basket comparison logic
+- [ ] Verify `db` does not contain business ranking/matching decisions beyond approved repository rules
+- [ ] Add focused boundary tests or architecture guardrails where practical
+- [ ] Document the final layer responsibilities in `docs/module_guide.md`
+
+## 27. Download wrapper stabilization
+- [ ] Stabilize `RetailChainsDownloadManager`
+- [ ] Detect success based on actual files written to disk
+- [ ] Distinguish `success`, `partial`, and `failed` outcomes clearly
+- [ ] Fix false failure reporting when files were downloaded successfully
+- [ ] Normalize enum/string handling against the external dependency
+- [ ] Harden `render_report()` for partial and edge-case outputs
+- [ ] Add regression tests for known wrapper bugs
+
+## 28. Constrained download options
+- [ ] Add `limit` support
+- [ ] Add `when_date` support
+- [ ] Add `file_types` filtering support
+- [ ] Add `cleanup_before_download` support
+- [ ] Validate constrained-download arguments
+- [ ] Document constrained download behavior and defaults
+
+## 29. Downloaded file inventory and filesystem handling
+- [ ] Analyze the real folder structure created by the external downloader
+- [ ] Respect upstream folder layout without rewriting it unnecessarily
+- [ ] Add helpers for file discovery under downloaded directories
+- [ ] Classify downloaded files by family (`Stores`, `Price`, `PriceFull`, `Promo`, `PromoFull`)
+- [ ] Investigate unusual names such as `*.gz.xml.xml`
+- [ ] Determine which naming anomalies are upstream and which are wrapper-side
+- [ ] Add reporting for file counts and discovered file categories
+
+## 30. Safe local data handling and repository hygiene
+- [ ] Harden `.gitignore` for `data/raw`, generated outputs, local DBs, logs, and runtime artifacts
+- [ ] Ensure `data/samples` remains versioned
+- [ ] Preserve `.gitkeep` handling where needed
+- [ ] Document what must never be committed
+- [ ] Add a short developer note for cleaning tracked local data from git index if needed
+
+## 31. Retailer file structure documentation
+- [ ] Create `docs/retailer_file_structure.md`
+- [ ] Document main retailer file families and their purpose
+- [ ] Document common naming patterns and extension variants
+- [ ] Document compression/container expectations (`xml`, `gz`, nested naming oddities)
+- [ ] Map each file family to internal targets: stores / products / prices / promos
+- [ ] Add references to external/upstream documentation
+- [ ] Clearly separate confirmed facts from implementation inference
+
+## 32. Real retailer parsing support
+- [ ] Extend parsing flow for real retailer XML inputs
+- [ ] Add support for compressed inputs if required by actual files
+- [ ] Parse store files from real retailer downloads
+- [ ] Parse price files from real retailer downloads
+- [ ] Decide and document whether promo files are in MVP parse scope or post-MVP scope
+- [ ] Add parsing summaries for real retailer file batches
+- [ ] Add deterministic tests around representative real-file fixtures
+
+## 33. Mapping external retailer fields to internal records
+- [ ] Define mapping from retailer store files to internal store records
+- [ ] Define mapping from retailer price files to internal price records
+- [ ] Define mapping rules for barcodes, product names, chain codes, store codes, and dates
+- [ ] Handle missing or malformed source fields safely
+- [ ] Document normalization rules for imported retailer data
+- [ ] Add unit tests for field mapping behavior
+
+## 34. Download-to-parse-to-load integration
+- [ ] Implement discovery flow for downloaded retailer files
+- [ ] Connect discovered files into parser entry points
+- [ ] Connect parsed outputs into loader flows
+- [ ] Support loading from a downloaded directory tree
+- [ ] Produce a unified batch import summary
+- [ ] Add integration tests for `downloaded files -> parse -> load`
+
+## 35. Real retailer import into SQLite
+- [ ] Import chains from retailer data where needed
+- [ ] Import stores from real retailer files
+- [ ] Import prices from real retailer files
+- [ ] Ensure idempotent or controlled repeated imports
+- [ ] Validate `replace` versus `append` semantics for real import batches
+- [ ] Add end-to-end integration tests against small real-world fixtures
+
+## 36. Post-download operational tooling
+- [ ] Add cleanup command or helper for large downloaded folders
+- [ ] Add reporting for download size and file count
+- [ ] Add a safe repeat-run workflow for local experimentation
+- [ ] Improve `run_examples.md` for real download/import flows
+- [ ] Document recommended local workflow: `download -> inspect -> parse -> load -> compare`
+
+## 37. Promotions decision track
+- [ ] Decide whether `Promo` / `PromoFull` are ignored in MVP
+- [ ] If ignored, document that clearly
+- [ ] If included later, define a separate post-MVP promo ingestion plan
+- [ ] Keep promo support isolated from core basket comparison until explicitly enabled
+
+## 38. Real-data comparison validation
+- [ ] Validate that imported real retailer prices participate correctly in basket comparison
+- [ ] Verify chain ranking still behaves correctly with partial baskets
+- [ ] Verify unmatched and ambiguous items still surface correctly after real import
+- [ ] Add at least one realistic end-to-end comparison scenario using imported retailer data
+
+## 39. Documentation and developer workflow alignment
+- [ ] Update `README.md` for real download/import usage
+- [ ] Add links from `README.md` to retailer-file documentation
+- [ ] Update `module_guide.md` if import/download boundaries changed
+- [ ] Update `run_examples.md` with safe examples that do not require committing raw retailer data
+- [ ] Document external dependency role and boundaries explicitly

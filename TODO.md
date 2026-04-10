@@ -31,11 +31,11 @@
 - [x] Add unit tests for schema creation and DB initialization
 
 ## 6. ProductRepository
-- [x] Implement product upsert
-- [x] Implement lookup by barcode
-- [x] Implement lookup by normalized name
-- [x] Implement retrieval by product IDs
-- [x] Add repository unit tests
+- [ ] Implement product upsert
+- [ ] Implement lookup by barcode
+- [ ] Implement lookup by normalized name
+- [ ] Implement retrieval by product IDs
+- [ ] Add repository unit tests
 
 ## 7. ChainRepository and StoreRepository
 - [x] Implement chain upsert and lookup operations
@@ -175,110 +175,110 @@
 - [x] CLI scope in MVP implemented
 
 ## 26. Layer-boundary verification and architecture hardening
-- [ ] Verify `app` does not implement business logic that belongs in `engine`
-- [ ] Verify `engine` does not perform file I/O or direct parsing
-- [ ] Verify `data` does not contain basket comparison logic
-- [ ] Verify `db` does not contain business ranking/matching decisions beyond approved repository rules
-- [ ] Add focused boundary tests or architecture guardrails where practical
-- [ ] Document the final layer responsibilities in `docs/module_guide.md`
+- [x] Verify `app` does not implement business logic that belongs in `engine`
+- [x] Verify `engine` does not perform file I/O or direct parsing
+- [x] Verify `data` does not contain basket comparison logic
+- [x] Verify `db` does not contain business ranking/matching decisions beyond approved repository rules
+- [x] Add focused boundary tests or architecture guardrails where practical
+- [x] Document the final layer responsibilities in `docs/module_guide.md`
 
 ## 27. Download wrapper stabilization
-- [ ] Stabilize `RetailChainsDownloadManager`
-- [ ] Detect success based on actual files written to disk
-- [ ] Distinguish `success`, `partial`, and `failed` outcomes clearly
-- [ ] Fix false failure reporting when files were downloaded successfully
-- [ ] Normalize enum/string handling against the external dependency
-- [ ] Harden `render_report()` for partial and edge-case outputs
-- [ ] Add regression tests for known wrapper bugs
+- [x] Stabilize `RetailChainsDownloadManager`
+- [x] Detect success based on actual files written to disk
+- [x] Distinguish `success`, `partial`, and `failed` outcomes clearly
+- [x] Fix false failure reporting when files were downloaded successfully
+- [x] Normalize enum/string handling against the external dependency
+- [x] Harden `render_report()` for partial and edge-case outputs
+- [x] Add regression tests for known wrapper bugs
 
 ## 28. Constrained download options
-- [ ] Add `limit` support
-- [ ] Add `when_date` support
-- [ ] Add `file_types` filtering support
-- [ ] Add `cleanup_before_download` support
-- [ ] Validate constrained-download arguments
-- [ ] Document constrained download behavior and defaults
+- [x] Add `limit` support
+- [x] Add `when_date` support
+- [x] Add `file_types` filtering support
+- [x] Add `cleanup_before_download` support
+- [x] Validate constrained-download arguments
+- [x] Document constrained download behavior and defaults
 
 ## 29. Downloaded file inventory and filesystem handling
-- [ ] Analyze the real folder structure created by the external downloader
-- [ ] Respect upstream folder layout without rewriting it unnecessarily
-- [ ] Add helpers for file discovery under downloaded directories
+- [x] Analyze the real folder structure created by the external downloader
+- [x] Respect upstream folder layout without rewriting it unnecessarily
+- [x] Add helpers for file discovery under downloaded directories
 - [ ] Classify downloaded files by family (`Stores`, `Price`, `PriceFull`, `Promo`, `PromoFull`)
 - [ ] Investigate unusual names such as `*.gz.xml.xml`
 - [ ] Determine which naming anomalies are upstream and which are wrapper-side
 - [ ] Add reporting for file counts and discovered file categories
 
 ## 30. Safe local data handling and repository hygiene
-- [ ] Harden `.gitignore` for `data/raw`, generated outputs, local DBs, logs, and runtime artifacts
-- [ ] Ensure `data/samples` remains versioned
-- [ ] Preserve `.gitkeep` handling where needed
-- [ ] Document what must never be committed
+- [x] Harden `.gitignore` for `data/raw`, generated outputs, local DBs, logs, and runtime artifacts
+- [x] Ensure `data/samples` remains versioned
+- [x] Preserve `.gitkeep` handling where needed
+- [x] Document what must never be committed
 - [ ] Add a short developer note for cleaning tracked local data from git index if needed
 
 ## 31. Retailer file structure documentation
-- [ ] Create `docs/retailer_file_structure.md`
-- [ ] Document main retailer file families and their purpose
-- [ ] Document common naming patterns and extension variants
-- [ ] Document compression/container expectations (`xml`, `gz`, nested naming oddities)
-- [ ] Map each file family to internal targets: stores / products / prices / promos
-- [ ] Add references to external/upstream documentation
-- [ ] Clearly separate confirmed facts from implementation inference
+- [x] Create `docs/retailer_file_structure.md`
+- [x] Document main retailer file families and their purpose
+- [x] Document common naming patterns and extension variants
+- [x] Document compression/container expectations (`xml`, `gz`, nested naming oddities)
+- [x] Map each file family to internal targets: stores / products / prices / promos
+- [x] Add references to external/upstream documentation
+- [x] Clearly separate confirmed facts from implementation inference
 
 ## 32. Real retailer parsing support
-- [ ] Extend parsing flow for real retailer XML inputs
-- [ ] Add support for compressed inputs if required by actual files
-- [ ] Parse store files from real retailer downloads
-- [ ] Parse price files from real retailer downloads
-- [ ] Decide and document whether promo files are in MVP parse scope or post-MVP scope
-- [ ] Add parsing summaries for real retailer file batches
-- [ ] Add deterministic tests around representative real-file fixtures
+- [x] Extend parsing flow for real retailer XML inputs
+- [x] Add support for compressed inputs if required by actual files
+- [x] Parse store files from real retailer downloads
+- [x] Parse price files from real retailer downloads
+- [x] Decide and document whether promo files are in MVP parse scope or post-MVP scope
+- [x] Add parsing summaries for real retailer file batches
+- [x] Add deterministic tests around representative real-file fixtures
 
 ## 33. Mapping external retailer fields to internal records
-- [ ] Define mapping from retailer store files to internal store records
-- [ ] Define mapping from retailer price files to internal price records
-- [ ] Define mapping rules for barcodes, product names, chain codes, store codes, and dates
-- [ ] Handle missing or malformed source fields safely
-- [ ] Document normalization rules for imported retailer data
-- [ ] Add unit tests for field mapping behavior
+- [x] Define mapping from retailer store files to internal store records
+- [x] Define mapping from retailer price files to internal price records
+- [x] Define mapping rules for barcodes, product names, chain codes, store codes, and dates
+- [x] Handle missing or malformed source fields safely
+- [x] Document normalization rules for imported retailer data
+- [x] Add unit tests for field mapping behavior
 
 ## 34. Download-to-parse-to-load integration
-- [ ] Implement discovery flow for downloaded retailer files
-- [ ] Connect discovered files into parser entry points
-- [ ] Connect parsed outputs into loader flows
-- [ ] Support loading from a downloaded directory tree
-- [ ] Produce a unified batch import summary
-- [ ] Add integration tests for `downloaded files -> parse -> load`
+- [x] Implement discovery flow for downloaded retailer files
+- [x] Connect discovered files into parser entry points
+- [x] Connect parsed outputs into loader flows
+- [x] Support loading from a downloaded directory tree
+- [x] Produce a unified batch import summary
+- [x] Add integration tests for `downloaded files -> parse -> load`
 
 ## 35. Real retailer import into SQLite
-- [ ] Import chains from retailer data where needed
-- [ ] Import stores from real retailer files
-- [ ] Import prices from real retailer files
-- [ ] Ensure idempotent or controlled repeated imports
-- [ ] Validate `replace` versus `append` semantics for real import batches
-- [ ] Add end-to-end integration tests against small real-world fixtures
+- [x] Import chains from retailer data where needed
+- [x] Import stores from real retailer files
+- [x] Import prices from real retailer files
+- [x] Ensure idempotent or controlled repeated imports
+- [x] Validate `replace` versus `append` semantics for real import batches
+- [x] Add end-to-end integration tests against small real-world fixtures
 
 ## 36. Post-download operational tooling
-- [ ] Add cleanup command or helper for large downloaded folders
-- [ ] Add reporting for download size and file count
-- [ ] Add a safe repeat-run workflow for local experimentation
-- [ ] Improve `run_examples.md` for real download/import flows
-- [ ] Document recommended local workflow: `download -> inspect -> parse -> load -> compare`
+- [x] Add cleanup command or helper for large downloaded folders
+- [x] Add reporting for download size and file count
+- [x] Add a safe repeat-run workflow for local experimentation
+- [x] Improve `run_examples.md` for real download/import flows
+- [x] Document recommended local workflow: `download -> inspect -> parse -> load -> compare`
 
 ## 37. Promotions decision track
-- [ ] Decide whether `Promo` / `PromoFull` are ignored in MVP
-- [ ] If ignored, document that clearly
+- [x] Decide whether `Promo` / `PromoFull` are ignored in MVP
+- [x] If ignored, document that clearly
 - [ ] If included later, define a separate post-MVP promo ingestion plan
-- [ ] Keep promo support isolated from core basket comparison until explicitly enabled
+- [x] Keep promo support isolated from core basket comparison until explicitly enabled
 
 ## 38. Real-data comparison validation
-- [ ] Validate that imported real retailer prices participate correctly in basket comparison
-- [ ] Verify chain ranking still behaves correctly with partial baskets
-- [ ] Verify unmatched and ambiguous items still surface correctly after real import
-- [ ] Add at least one realistic end-to-end comparison scenario using imported retailer data
+- [x] Validate that imported real retailer prices participate correctly in basket comparison
+- [x] Verify chain ranking still behaves correctly with partial baskets
+- [x] Verify unmatched and ambiguous items still surface correctly after real import
+- [x] Add at least one realistic end-to-end comparison scenario using imported retailer data
 
 ## 39. Documentation and developer workflow alignment
-- [ ] Update `README.md` for real download/import usage
-- [ ] Add links from `README.md` to retailer-file documentation
-- [ ] Update `module_guide.md` if import/download boundaries changed
-- [ ] Update `run_examples.md` with safe examples that do not require committing raw retailer data
-- [ ] Document external dependency role and boundaries explicitly
+- [x] Update `README.md` for real download/import usage
+- [x] Add links from `README.md` to retailer-file documentation
+- [x] Update `module_guide.md` if import/download boundaries changed
+- [x] Update `run_examples.md` with safe examples that do not require committing raw retailer data
+- [x] Document external dependency role and boundaries explicitly

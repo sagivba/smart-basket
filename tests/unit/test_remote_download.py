@@ -230,6 +230,9 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
         self.assertIn("- output_directory=", report)
         self.assertIn("- file_count=", report)
         self.assertIn("- total_bytes=", report)
+        self.assertIn("- discovered_families=", report)
+        self.assertIn("- unclassified_files=", report)
+        self.assertIn("- naming_anomalies=", report)
         self.assertIn("- status=", report)
         self.assertIn("- sample_files=", report)
 
@@ -435,6 +438,49 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
             )
         self.assertTrue(result.success)
         self.assertFalse(stale.exists())
+
+    def test_inventory_classification_and_anomaly_detection(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            chain_dir = Path(temp_dir) / "shufersal" / "nested"
+            chain_dir.mkdir(parents=True, exist_ok=True)
+            (chain_dir / "Stores123.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "Price111.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "PriceFull222.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "Promo333.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "PromoFull444.gz.xml.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "unknown.bin").write_text("ok", encoding="utf-8")
+
+            inventory = manager._discover_downloaded_files(Path(temp_dir) / "shufersal")
+
+        self.assertEqual(inventory["family_counts"]["Stores"], 1)
+        self.assertEqual(inventory["family_counts"]["Price"], 1)
+        self.assertEqual(inventory["family_counts"]["PriceFull"], 1)
+        self.assertEqual(inventory["family_counts"]["Promo"], 1)
+        self.assertEqual(inventory["family_counts"]["PromoFull"], 1)
+        self.assertEqual(len(inventory["unclassified_files"]), 1)
+        self.assertEqual(len(inventory["naming_anomalies"]), 1)
+        self.assertIn("double xml suffix", inventory["naming_anomalies"][0])
+
+    def test_download_result_includes_inventory_reporting(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports({}):
+            odd_name = Path(temp_dir) / "shufersal" / "PromoFullManual.gz.xml.xml"
+            odd_name.parent.mkdir(parents=True, exist_ok=True)
+            odd_name.write_text("ok", encoding="utf-8")
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL"],
+                file_types=["STORE_FILE"],
+                strict_success=False,
+            )
+            report = manager.render_report(result)
+
+        chain_result = result.chain_results[0]
+        self.assertIn("Stores", chain_result.discovered_family_counts)
+        self.assertTrue(chain_result.naming_anomalies)
+        self.assertTrue(any("upstream naming anomalies" in warning for warning in chain_result.warnings))
+        self.assertIn("- anomaly_samples=", report)
 
 
 if __name__ == "__main__":

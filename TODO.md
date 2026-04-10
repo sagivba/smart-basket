@@ -173,3 +173,4 @@
 - [x] Basket persistence policy — **implemented**: basket items are persisted in SQLite (`basket_items` schema + repository CRUD), and application/CLI flows read and write persisted basket state by `basket_id`.
 - [x] Partial-calculation policy for unmatched items — **implemented**: unmatched inputs are excluded from chain total calculations, returned separately as `unmatched_items`, and missing-per-chain reporting stays independent.
 - [x] CLI scope in MVP — **implemented**: a basic CLI entry point (`load`, `add-item`, `compare`) is present and covered by dedicated unit/integration tests.
+- [x] Promotion file scope (`Promo`/`PromoFull`) — **implemented as scope decision**: promotion files are explicitly ignored in MVP ingestion and basket pricing, and a post-MVP isolated ingestion/DB/feature-flag track is documented in `docs/system_spec.md` (section 2.10).

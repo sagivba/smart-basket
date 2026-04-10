@@ -346,6 +346,37 @@ def _get_optional_field(row: dict[str, Any], aliases: tuple[str, ...]) -> str | 
     return None
 
 
+def _normalize_barcode_value(value: str) -> str:
+    """Normalize barcode text from common flat-file representations."""
+    normalized = normalize_whitespace(value)
+    if normalized.endswith(".0") and normalized[:-2].isdigit():
+        return normalized[:-2]
+    return normalized
+
+
+def _normalize_code_value(value: str) -> str:
+    """Normalize generic code values to uppercase trimmed text."""
+    return normalize_whitespace(value).upper()
+
+
+def _normalize_price_date_value(value: str) -> str:
+    """Normalize supported date representations to ISO format."""
+    normalized = normalize_whitespace(value)
+    if not normalized:
+        raise ValueError("price_date is required")
+
+    if normalized.isdigit() and len(normalized) == 8:
+        try:
+            return datetime.strptime(normalized, "%Y%m%d").date().isoformat()
+        except ValueError as exc:
+            raise ValueError("price_date must be a valid date") from exc
+
+    try:
+        return datetime.fromisoformat(normalized).date().isoformat()
+    except ValueError as exc:
+        raise ValueError("price_date must be ISO date (YYYY-MM-DD)") from exc
+
+
 def _build_product_record(row_number: int, raw_row: dict[str, Any]) -> ParsedProductRecord:
     """Build one validated ParsedProductRecord from an input row."""
     row = _normalize_row(raw_row)

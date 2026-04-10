@@ -1,8 +1,8 @@
 # Module guide
 
-This document records a **narrow architecture audit** against `docs/system_spec.md` section 3.6 and section 4 (layered responsibilities).
+This document records layer responsibilities and the current evidence-backed boundary checks for the MVP architecture.
 
-## Audit scope and method
+## Layer responsibilities (finalized for MVP)
 
 Checked modules and tests for evidence of separation between:
 - parsing (`Modules/data/parser.py`)
@@ -11,27 +11,30 @@ Checked modules and tests for evidence of separation between:
 - application orchestration (`Modules/app/*`)
 - optional downloader integration boundaries (`Modules/data/remote_download.py`)
 
-Evidence was taken from implementation files and current `unittest` coverage only.
+### `Modules/engine`
+- Owns basket matching, missing-item detection, total calculations, and deterministic ranking.
+- Must not perform file I/O or parse raw source files.
 
-## Classification legend
+### `Modules/data`
+- Owns local file parsing/normalization and load-flow orchestration into DB repositories.
+- Must not implement basket comparison/ranking logic.
 
-- **Implemented**: responsibility is present and evidence-backed in code and tests.
-- **Partial**: responsibility exists but boundaries are mixed or evidence is incomplete.
-- **Placeholder-only**: module/file exists but does not yet implement required behavior.
-- **Missing**: expected behavior is absent.
+### `Modules/db`
+- Owns SQLite schema, persistence, and repository query logic.
+- May include approved repository selection rules (for MVP, representative chain price = minimum store price per chain/product).
+- Must not implement basket ranking/matching business logic.
 
-## Layer audit status (current)
+### `Modules/models`
+- Owns entities and result DTOs shared across layers.
 
-### Modules/data
-**Status: Partial**
+### `Modules/utils`
+- Owns focused reusable helpers (e.g., normalization and validation).
 
 Implemented:
 - Parsing is isolated in `parser.py` with format detection, row normalization, validation, and structured parse errors.
 - Optional remote downloader integration is isolated in `remote_download.py` and focused on raw-file retrieval.
 
-Boundary concern:
-- `PriceDataLoader` writes directly to SQLite and performs SQL lookups/upserts (`INSERT`, `DELETE`, `SELECT`) instead of delegating persistence to DB repositories.
-- This conflicts with the system spec expectation that DB layer owns persistence/query logic while data layer passes cleaned records forward.
+Architecture boundary checks are enforced in `tests/unit/test_architecture_boundaries.py`:
 
 Boundary note:
 - Downloader responsibilities stop at local raw-file download. Import parsing/loading remains a separate flow.
@@ -39,15 +42,15 @@ Boundary note:
 ### Modules/db
 **Status: Partial**
 
-Implemented:
-- SQLite connection management and schema creation are implemented in `database.py`.
-- `BasketRepository` persistence methods are implemented and unit-tested.
+These checks are intended as lightweight drift-prevention guardrails and are deliberately narrow to avoid false positives and unnecessary refactors.
 
-Missing/partial:
-- Repositories for products/chains/stores/prices are not implemented yet, leaving data loading to execute SQL directly from data layer.
+## Verified invariants and residual risk
 
-### Modules/engine
-**Status: Partial**
+Verified by current tests:
+- App use-case layer is thin and delegating.
+- Engine layer remains free from raw file parsing and direct file I/O.
+- Data layer remains focused on parsing/loading rather than basket comparison.
+- DB layer remains persistence-focused with no ranking orchestration logic.
 
 Implemented:
 - Basket result-building logic (line construction, totals, missing tracking, unmatched passthrough) is implemented and tested.

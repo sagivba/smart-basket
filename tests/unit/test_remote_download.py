@@ -13,7 +13,9 @@ from unittest.mock import patch
 from Modules.data.remote_download import (
     AttemptStatus,
     DownloadBatchResult,
+    DownloadOutcome,
     RetailChainsDownloadManager,
+    RetailerTransparencyDownloader,
     download_all_supported_chains,
 )
 
@@ -163,6 +165,7 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
         self.assertIsInstance(result, DownloadBatchResult)
         self.assertEqual(result.requested_chains, ["SHUFERSAL"])
         self.assertTrue(result.success)
+        self.assertEqual(result.outcome, DownloadOutcome.SUCCESS.value)
         self.assertEqual(result.total_failed_attempts, 0)
         self.assertEqual(len(result.chain_results), 1)
         self.assertTrue(all(attempt.success for attempt in result.chain_results[0].attempts))
@@ -173,6 +176,7 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
 
         self.assertEqual(result.requested_chains, ["SHUFERSAL", "HAZI_HINAM"])
         self.assertTrue(result.success)
+        self.assertEqual(result.outcome, DownloadOutcome.SUCCESS.value)
         self.assertEqual(len(result.chain_results), 2)
         self.assertEqual(result.total_successful_attempts, 10)
 
@@ -186,6 +190,7 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
             result = manager.download_chains(target_root=temp_dir, chains=["SHUFERSAL"])
 
         self.assertTrue(result.success)
+        self.assertEqual(result.outcome, DownloadOutcome.PARTIAL.value)
         self.assertEqual(result.total_failed_attempts, 2)
         self.assertEqual(result.total_skipped_attempts, 0)
         attempts = result.chain_results[0].attempts
@@ -212,7 +217,9 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
 
         chain_result = result.chain_results[0]
         self.assertFalse(result.success)
+        self.assertEqual(result.outcome, DownloadOutcome.FAILED.value)
         self.assertFalse(chain_result.success)
+        self.assertEqual(chain_result.outcome, DownloadOutcome.FAILED.value)
         self.assertEqual(result.total_successful_attempts, 0)
         self.assertEqual(result.total_failed_attempts, 5)
         self.assertTrue(chain_result.warnings)
@@ -231,6 +238,7 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
         self.assertIn("- file_count=", report)
         self.assertIn("- total_bytes=", report)
         self.assertIn("- status=", report)
+        self.assertIn("- outcome=", report)
         self.assertIn("- sample_files=", report)
 
     def test_render_report_never_crashes_with_unexpected_values(self) -> None:
@@ -372,8 +380,43 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
 
         chain_result = result.chain_results[0]
         self.assertTrue(chain_result.success)
-        self.assertEqual(chain_result.status, "SUCCESS_WITH_WARNINGS")
+        self.assertEqual(chain_result.status, DownloadOutcome.PARTIAL.value)
+        self.assertEqual(chain_result.outcome, DownloadOutcome.PARTIAL.value)
         self.assertIn(existing_file, chain_result.downloaded_files)
+
+    def test_partial_outcome_not_false_failure_when_any_file_written(self) -> None:
+        manager = RetailChainsDownloadManager()
+        behavior = {
+            ("SHUFERSAL", "STORE_FILE"): "error:temporary failure",
+            ("SHUFERSAL", "PRICE_FILE"): "success",
+        }
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports(behavior):
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL"],
+                file_types=["STORE_FILE", "PRICE_FILE"],
+            )
+            report = manager.render_report(result)
+
+        chain_result = result.chain_results[0]
+        self.assertTrue(chain_result.success)
+        self.assertEqual(chain_result.outcome, DownloadOutcome.PARTIAL.value)
+        self.assertEqual(chain_result.file_count, 1)
+        self.assertIn("overall_outcome=PARTIAL", report)
+        self.assertIn("- outcome=PARTIAL", report)
+
+    def test_normalizes_dotted_enum_style_identifiers(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports_with_enums({}):
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["ScraperFactory.SHUFERSAL"],
+                file_types=["FileTypesFilters.STORE_FILE"],
+            )
+
+        self.assertTrue(result.success)
+        self.assertEqual(result.requested_chains, ["SHUFERSAL"])
+        self.assertEqual(result.chain_results[0].attempts[0].file_type, "STORE_FILE")
 
     def test_nested_output_folder_detection(self) -> None:
         manager = RetailChainsDownloadManager()
@@ -435,6 +478,62 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
             )
         self.assertTrue(result.success)
         self.assertFalse(stale.exists())
+
+    def test_invalid_limit_raises_value_error(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "limit must be a positive integer or None"):
+                manager.download_chains(target_root=temp_dir, chains=["SHUFERSAL"], limit=0)
+
+    def test_invalid_when_date_raises_value_error(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "when_date must be a date, datetime, or None"):
+                manager.download_chains(
+                    target_root=temp_dir,
+                    chains=["SHUFERSAL"],
+                    when_date="2026-01-15",  # type: ignore[arg-type]
+                )
+
+    def test_unsupported_file_type_raises_value_error(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "unsupported file_types requested"):
+                manager.download_chains(
+                    target_root=temp_dir,
+                    chains=["SHUFERSAL"],
+                    file_types=["NOT_A_REAL_FILE_TYPE"],
+                )
+
+    def test_unsupported_chain_raises_value_error(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "unsupported chains requested"):
+                manager.download_chains(target_root=temp_dir, chains=["NOT_A_REAL_CHAIN"])
+
+    def test_cleanup_flag_type_is_validated(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "cleanup_before_download must be a bool"):
+                manager.download_chains(
+                    target_root=temp_dir,
+                    chains=["SHUFERSAL"],
+                    cleanup_before_download=1,  # type: ignore[arg-type]
+                )
+
+
+class TestRetailerTransparencyDownloader(unittest.TestCase):
+    def test_file_types_cannot_be_combined_with_legacy_options(self) -> None:
+        downloader = RetailerTransparencyDownloader(manager=RetailChainsDownloadManager())
+        with self.assertRaisesRegex(
+            ValueError,
+            "file_types cannot be combined with include_store_files/prefer_full_price_files",
+        ):
+            downloader.download_files(
+                target_root="/tmp/unused",
+                file_types=["STORE_FILE"],
+                include_store_files=True,
+            )
 
 
 if __name__ == "__main__":

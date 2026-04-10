@@ -170,6 +170,24 @@ This repository includes an **optional** raw-download integration that depends o
 
 The current integration uses the scraper package to download raw supermarket transparency files for selected chains into local folders. Parsing/loading downloaded XML/GZ files into this project's SQLite schema is a **separate step** and is not part of the downloader capability itself.
 
+### Downloader constrained options (wrapper behavior)
+
+The downloader wrapper supports constrained runs through these arguments:
+
+- `limit`: maximum number of files requested per chain/file-type attempt.
+- `when_date`: date/datetime filter passed to upstream task selection.
+- `file_types`: explicit subset from `STORE_FILE`, `PRICE_FILE`, `PRICE_FULL_FILE`, `PROMO_FILE`, `PROMO_FULL_FILE`.
+- `cleanup_before_download`: when `True`, clears each chain target folder before new download attempts.
+
+Defaults:
+
+- `limit=None` (no explicit limit applied by this wrapper)
+- `when_date=None` (no explicit date filter applied by this wrapper)
+- `file_types=None` (all supported file types in wrapper default order)
+- `cleanup_before_download=False` (keep existing files on disk)
+
+Invalid constrained arguments fail fast with `ValueError` (for example unsupported chain/file type names, non-positive `limit`, or invalid `when_date` type) so invalid input is never silently ignored.
+
 ### Licensing note (third-party dependency)
 
 The upstream OpenIsraeliSupermarkets packages referenced above are distributed under a custom non-commercial license model with attribution requirements. This project does not vendor that source code; it only integrates via external package dependency, and users should review upstream license terms before commercial use.

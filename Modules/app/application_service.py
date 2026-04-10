@@ -108,6 +108,7 @@ class TransparencyDownloaderProtocol(Protocol):
         file_types: list[str] | None = None,
         when_date: Any = None,
         limit: int | None = None,
+        cleanup_before_download: bool = False,
         include_store_files: bool | None = None,
         prefer_full_price_files: bool | None = None,
     ) -> Any:
@@ -127,6 +128,7 @@ class DownloadTransparencyFilesUseCase:
         file_types: list[str] | None = None,
         when_date: Any = None,
         limit: int | None = None,
+        cleanup_before_download: bool = False,
         include_store_files: bool | None = None,
         prefer_full_price_files: bool | None = None,
     ) -> Any:
@@ -137,6 +139,7 @@ class DownloadTransparencyFilesUseCase:
             file_types=file_types,
             when_date=when_date,
             limit=limit,
+            cleanup_before_download=cleanup_before_download,
             include_store_files=include_store_files,
             prefer_full_price_files=prefer_full_price_files,
         )
@@ -260,6 +263,7 @@ class ApplicationService:
         file_types: list[str] | None = None,
         when_date: Any = None,
         limit: int | None = None,
+        cleanup_before_download: bool = False,
         include_store_files: bool | None = None,
         prefer_full_price_files: bool | None = None,
     ) -> Any:
@@ -270,6 +274,7 @@ class ApplicationService:
             file_types=file_types,
             when_date=when_date,
             limit=limit,
+            cleanup_before_download=cleanup_before_download,
             include_store_files=include_store_files,
             prefer_full_price_files=prefer_full_price_files,
         )

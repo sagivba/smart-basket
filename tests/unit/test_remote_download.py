@@ -14,6 +14,7 @@ from Modules.data.remote_download import (
     AttemptStatus,
     DownloadBatchResult,
     RetailChainsDownloadManager,
+    RetailerTransparencyDownloader,
     download_all_supported_chains,
 )
 
@@ -435,6 +436,62 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
             )
         self.assertTrue(result.success)
         self.assertFalse(stale.exists())
+
+    def test_invalid_limit_raises_value_error(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "limit must be a positive integer or None"):
+                manager.download_chains(target_root=temp_dir, chains=["SHUFERSAL"], limit=0)
+
+    def test_invalid_when_date_raises_value_error(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "when_date must be a date, datetime, or None"):
+                manager.download_chains(
+                    target_root=temp_dir,
+                    chains=["SHUFERSAL"],
+                    when_date="2026-01-15",  # type: ignore[arg-type]
+                )
+
+    def test_unsupported_file_type_raises_value_error(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "unsupported file_types requested"):
+                manager.download_chains(
+                    target_root=temp_dir,
+                    chains=["SHUFERSAL"],
+                    file_types=["NOT_A_REAL_FILE_TYPE"],
+                )
+
+    def test_unsupported_chain_raises_value_error(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "unsupported chains requested"):
+                manager.download_chains(target_root=temp_dir, chains=["NOT_A_REAL_CHAIN"])
+
+    def test_cleanup_flag_type_is_validated(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "cleanup_before_download must be a bool"):
+                manager.download_chains(
+                    target_root=temp_dir,
+                    chains=["SHUFERSAL"],
+                    cleanup_before_download=1,  # type: ignore[arg-type]
+                )
+
+
+class TestRetailerTransparencyDownloader(unittest.TestCase):
+    def test_file_types_cannot_be_combined_with_legacy_options(self) -> None:
+        downloader = RetailerTransparencyDownloader(manager=RetailChainsDownloadManager())
+        with self.assertRaisesRegex(
+            ValueError,
+            "file_types cannot be combined with include_store_files/prefer_full_price_files",
+        ):
+            downloader.download_files(
+                target_root="/tmp/unused",
+                file_types=["STORE_FILE"],
+                include_store_files=True,
+            )
 
 
 if __name__ == "__main__":

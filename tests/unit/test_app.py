@@ -202,6 +202,7 @@ class TestApplicationService(unittest.TestCase):
             file_types=None,
             when_date=None,
             limit=2,
+            cleanup_before_download=False,
             include_store_files=None,
             prefer_full_price_files=None,
         )
@@ -232,6 +233,7 @@ class TestDownloadTransparencyFilesUseCase(unittest.TestCase):
             file_types=None,
             when_date=None,
             limit=3,
+            cleanup_before_download=True,
             include_store_files=True,
             prefer_full_price_files=True,
         )
@@ -243,6 +245,7 @@ class TestDownloadTransparencyFilesUseCase(unittest.TestCase):
             file_types=None,
             when_date=None,
             limit=3,
+            cleanup_before_download=True,
             include_store_files=True,
             prefer_full_price_files=True,
         )

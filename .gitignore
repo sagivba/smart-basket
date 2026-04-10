@@ -61,15 +61,15 @@ Thumbs.db
 *.log
 logs/
 
-# Project data: keep only deterministic samples in version control
-# - Ignore runtime/generated outputs
-# - Ignore downloaded/raw retailer files
-# - Keep .gitkeep placeholders for empty directories
+# Local data directories
 data/generated/*
 !data/generated/.gitkeep
+
+# Raw downloaded retailer files and large local inputs
 data/raw/*
 !data/raw/.gitkeep
-# Do not ignore deterministic sample data used by tests/docs
+
+# Keep deterministic sample data under version control
 !data/samples/**
 
 # Test fixtures artifacts

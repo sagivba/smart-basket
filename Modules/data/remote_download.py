@@ -120,6 +120,13 @@ class RetailChainsDownloadManager:
         strict_success: bool = False,
     ) -> DownloadBatchResult:
         """Download requested file categories for requested supported chains."""
+        self._validate_download_arguments(
+            chains=chains,
+            file_types=file_types,
+            when_date=when_date,
+            limit=limit,
+            cleanup_before_download=cleanup_before_download,
+        )
         started_at = datetime.utcnow()
         resolved_root = Path(target_root)
 
@@ -216,6 +223,36 @@ class RetailChainsDownloadManager:
             warnings=batch_warnings,
             errors=batch_errors,
         )
+
+    @staticmethod
+    def _validate_download_arguments(
+        *,
+        chains: list[str] | tuple[str, ...] | None,
+        file_types: list[str] | tuple[str, ...] | None,
+        when_date: date | datetime | None,
+        limit: int | None,
+        cleanup_before_download: bool,
+    ) -> None:
+        if when_date is not None and not isinstance(when_date, (date, datetime)):
+            raise ValueError("when_date must be a date, datetime, or None")
+        if limit is not None and (not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0):
+            raise ValueError("limit must be a positive integer or None")
+        if not isinstance(cleanup_before_download, bool):
+            raise ValueError("cleanup_before_download must be a bool")
+        if chains is not None:
+            requested_chains = [RetailChainsDownloadManager._normalize_chain_name(c) for c in chains]
+            unsupported_chains = [c for c in requested_chains if c not in SUPPORTED_CHAIN_ORDER]
+            if unsupported_chains:
+                raise ValueError(
+                    f"unsupported chains requested: {', '.join(sorted(set(unsupported_chains)))}"
+                )
+        if file_types is not None:
+            requested_file_types = [RetailChainsDownloadManager._normalize_file_type_name(ft) for ft in file_types]
+            unsupported_file_types = [ft for ft in requested_file_types if ft not in DEFAULT_FILE_TYPE_ORDER]
+            if unsupported_file_types:
+                raise ValueError(
+                    f"unsupported file_types requested: {', '.join(sorted(set(unsupported_file_types)))}"
+                )
 
     def render_report(self, batch_result: DownloadBatchResult) -> str:
         """Render a deterministic human-readable report for batch results."""
@@ -678,6 +715,12 @@ class RetailerTransparencyDownloader:
         prefer_full_price_files: bool | None = None,
     ) -> DownloadBatchResult:
         """Download chain files via the higher-level manager."""
+        if file_types is not None and (
+            include_store_files is not None or prefer_full_price_files is not None
+        ):
+            raise ValueError(
+                "file_types cannot be combined with include_store_files/prefer_full_price_files"
+            )
         resolved_file_types = file_types
         if resolved_file_types is None and (
             include_store_files is not None or prefer_full_price_files is not None

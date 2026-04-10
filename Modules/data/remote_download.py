@@ -40,6 +40,14 @@ class AttemptStatus(str, Enum):
     SKIPPED = "SKIPPED"
 
 
+class DownloadOutcome(str, Enum):
+    """High-level outcome values for chain and batch reporting."""
+
+    SUCCESS = "SUCCESS"
+    PARTIAL = "PARTIAL"
+    FAILED = "FAILED"
+
+
 @dataclass(slots=True)
 class FailureDetail:
     """Structured failure detail that preserves root-cause information."""
@@ -83,7 +91,8 @@ class ChainDownloadResult:
     downloaded_files: list[Path] = field(default_factory=list)
     file_count: int = 0
     total_bytes: int = 0
-    status: str = "FAILED"
+    status: str = DownloadOutcome.FAILED.value
+    outcome: str = DownloadOutcome.FAILED.value
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -102,6 +111,7 @@ class DownloadBatchResult:
     total_failed_attempts: int = 0
     total_skipped_attempts: int = 0
     success: bool = False
+    outcome: str = DownloadOutcome.FAILED.value
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -149,6 +159,7 @@ class RetailChainsDownloadManager:
                 total_failed_attempts=len(chain_results),
                 total_skipped_attempts=sum(len(c.requested_file_types) for c in chain_results),
                 success=False,
+                outcome=DownloadOutcome.FAILED.value,
                 errors=[f"failed to load il-supermarket-scraper API: {normalized_reason}"],
             )
 
@@ -201,6 +212,14 @@ class RetailChainsDownloadManager:
             if attempt.status == AttemptStatus.SKIPPED
         )
         total_files_downloaded = sum(chain_result.file_count for chain_result in chain_results)
+        overall_success = all(chain_result.success for chain_result in chain_results)
+        chain_outcomes = [self._normalize_outcome(chain_result.outcome) for chain_result in chain_results]
+        if chain_outcomes and all(outcome == DownloadOutcome.SUCCESS.value for outcome in chain_outcomes):
+            batch_outcome = DownloadOutcome.SUCCESS.value
+        elif any(outcome in (DownloadOutcome.SUCCESS.value, DownloadOutcome.PARTIAL.value) for outcome in chain_outcomes):
+            batch_outcome = DownloadOutcome.PARTIAL.value
+        else:
+            batch_outcome = DownloadOutcome.FAILED.value
 
         return DownloadBatchResult(
             requested_chains=resolved_chains,
@@ -212,7 +231,8 @@ class RetailChainsDownloadManager:
             total_successful_attempts=total_successful_attempts,
             total_failed_attempts=total_failed_attempts,
             total_skipped_attempts=total_skipped_attempts,
-            success=all(chain_result.success for chain_result in chain_results),
+            success=overall_success,
+            outcome=batch_outcome,
             warnings=batch_warnings,
             errors=batch_errors,
         )
@@ -229,6 +249,7 @@ class RetailChainsDownloadManager:
                 f"attempts_skipped={batch_result.total_skipped_attempts}",
                 f"files_downloaded={batch_result.total_files_downloaded}",
                 f"overall_success={batch_result.success}",
+                f"overall_outcome={self._normalize_outcome(getattr(batch_result, 'outcome', None))}",
             ]
 
             for chain_result in batch_result.chain_results:
@@ -237,7 +258,8 @@ class RetailChainsDownloadManager:
                 lines.append(f"- output_directory={self._safe_str(chain_result.output_directory)}")
                 lines.append(f"- file_count={chain_result.file_count}")
                 lines.append(f"- total_bytes={chain_result.total_bytes}")
-                lines.append(f"- status={chain_result.status}")
+                lines.append(f"- status={self._normalize_outcome(getattr(chain_result, 'status', None))}")
+                lines.append(f"- outcome={self._normalize_outcome(getattr(chain_result, 'outcome', None))}")
                 sample_paths = ", ".join(self._safe_str(path) for path in chain_result.downloaded_files[:5]) or "none"
                 lines.append(f"- sample_files={sample_paths}")
                 for attempt in chain_result.attempts:
@@ -429,19 +451,23 @@ class RetailChainsDownloadManager:
         if not downloaded_files:
             warnings.append(f"{self._normalize_chain_name(request.chain_name)}: no files downloaded")
         failed_attempts = [attempt for attempt in attempts if attempt.status == AttemptStatus.FAILED]
+        chain_outcome = DownloadOutcome.FAILED
         if strict_success:
             success = bool(attempts) and not failed_attempts and bool(downloaded_files)
+            if success:
+                chain_outcome = DownloadOutcome.SUCCESS
+            elif downloaded_files:
+                chain_outcome = DownloadOutcome.PARTIAL
         else:
             success = bool(downloaded_files)
             if success and failed_attempts:
                 warnings.append(
                     f"{self._normalize_chain_name(request.chain_name)}: files exist on disk despite failed attempts"
                 )
-        status = "FAILED"
-        if success and (warnings or errors or failed_attempts):
-            status = "SUCCESS_WITH_WARNINGS"
-        elif success:
-            status = "SUCCESS"
+            if success and failed_attempts:
+                chain_outcome = DownloadOutcome.PARTIAL
+            elif success:
+                chain_outcome = DownloadOutcome.SUCCESS
         return ChainDownloadResult(
             chain_name=self._normalize_chain_name(request.chain_name),
             success=success,
@@ -451,7 +477,8 @@ class RetailChainsDownloadManager:
             downloaded_files=downloaded_files,
             file_count=len(downloaded_files),
             total_bytes=total_bytes,
-            status=status,
+            status=chain_outcome.value,
+            outcome=chain_outcome.value,
             warnings=warnings,
             errors=errors,
         )
@@ -506,7 +533,8 @@ class RetailChainsDownloadManager:
             downloaded_files=[],
             file_count=0,
             total_bytes=0,
-            status="FAILED",
+            status=DownloadOutcome.FAILED.value,
+            outcome=DownloadOutcome.FAILED.value,
             warnings=[f"{normalized_chain}: no files downloaded"],
             errors=[f"{normalized_chain} CHAIN_INIT: {normalized_reason}"],
         )
@@ -539,19 +567,13 @@ class RetailChainsDownloadManager:
 
     @staticmethod
     def _normalize_chain_name(value: Any) -> str:
-        if hasattr(value, "name"):
-            name_value = getattr(value, "name")
-            if isinstance(name_value, str) and name_value.strip():
-                return name_value.strip().upper()
-        return RetailChainsDownloadManager._safe_str(value).strip().upper()
+        token = RetailChainsDownloadManager._extract_enum_like_token(value)
+        return token.upper()
 
     @staticmethod
     def _normalize_file_type_name(value: Any) -> str:
-        if hasattr(value, "name"):
-            name_value = getattr(value, "name")
-            if isinstance(name_value, str) and name_value.strip():
-                return name_value.strip().upper()
-        return RetailChainsDownloadManager._safe_str(value).strip().upper()
+        token = RetailChainsDownloadManager._extract_enum_like_token(value)
+        return token.upper()
 
     @staticmethod
     def _normalize_attempt_status(status: Any) -> str:
@@ -560,6 +582,31 @@ class RetailChainsDownloadManager:
         if hasattr(status, "value"):
             return RetailChainsDownloadManager._safe_str(getattr(status, "value")).upper()
         return RetailChainsDownloadManager._safe_str(status).upper() or AttemptStatus.FAILED.value
+
+    @staticmethod
+    def _normalize_outcome(outcome: Any) -> str:
+        if isinstance(outcome, DownloadOutcome):
+            return outcome.value
+        if hasattr(outcome, "value"):
+            return RetailChainsDownloadManager._safe_str(getattr(outcome, "value")).upper()
+        normalized = RetailChainsDownloadManager._safe_str(outcome).strip().upper()
+        if normalized in (DownloadOutcome.SUCCESS.value, DownloadOutcome.PARTIAL.value, DownloadOutcome.FAILED.value):
+            return normalized
+        if normalized == "SUCCESS_WITH_WARNINGS":
+            return DownloadOutcome.PARTIAL.value
+        return DownloadOutcome.FAILED.value
+
+    @staticmethod
+    def _extract_enum_like_token(value: Any) -> str:
+        if hasattr(value, "name"):
+            name_value = getattr(value, "name")
+            if isinstance(name_value, str) and name_value.strip():
+                return name_value.strip()
+        raw = RetailChainsDownloadManager._safe_str(value).strip()
+        raw = raw.strip("<>").strip()
+        if "." in raw:
+            raw = raw.split(".")[-1]
+        return raw
 
     @staticmethod
     def _resolve_upstream_scraper_identifier(*, package_api: dict[str, Any], chain_name: str) -> Any:

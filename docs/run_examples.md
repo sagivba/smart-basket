@@ -1,86 +1,28 @@
 # Run command examples
 
-Examples below were re-run from the repository root. Downloader examples are **Python API snippets** (the downloader is not exposed as a CLI command in this repository).
+Examples below are safe for local use and do **not** require committing raw retailer data.
 
-The first step can now download raw transparency files for:
-- `SHUFERSAL`
-- `HAZI_HINAM`
+## Safety rules before you run examples
 
-## 1) Download raw transparency files (Python API)
+- Keep raw retailer downloads under `data/raw/downloads/` only.
+- Do not stage files under `data/raw/` for commit.
+- Use `/tmp` for ad-hoc SQLite files.
+- Prefer deterministic fixtures for import and tests.
 
-### 1.1 Clean the download target folder
+See `docs/retailer_files.md` for workflow and dependency boundaries.
+
+## 1) Optional: download raw transparency files (Python API)
+
+The downloader is available as a Python API (not a dedicated CLI command).
+This step is optional for local dev and not required for tests.
+
+### 1.1 Reset local download target
 
 ```bash
 python -c "from pathlib import Path; import shutil; shutil.rmtree('data/raw/downloads', ignore_errors=True); Path('data/raw/downloads').mkdir(parents=True, exist_ok=True)"
 ```
 
-### 1.2 Download all supported chains and print a report
-
-```bash
-python - <<'PY'
-from Modules.data.remote_download import RetailChainsDownloadManager
-
-manager = RetailChainsDownloadManager()
-result = manager.download_chains(target_root='data/raw/downloads')
-print('success=', result.success)
-print(manager.render_report(result))
-PY
-```
-
-> `render_report(...)` is safe to call for both successful and failed runs and always returns text output.
-Real runs may create nested folders such as:
-- `data/raw/downloads/shufersal/Shufersal/`
-- `data/raw/downloads/hazi_hinam/HaziHinam/`
-
-### 1.3 Download raw files for Shufersal only
-
-```bash
-python - <<'PY'
-from Modules.data.remote_download import RetailChainsDownloadManager
-
-manager = RetailChainsDownloadManager()
-result = manager.download_chains(
-    target_root='data/raw/downloads',
-    chains=['SHUFERSAL'],
-)
-print('success=', result.success)
-print(manager.render_report(result))
-PY
-```
-
-### 1.4 Download raw files for Hazi Hinam only
-
-```bash
-python - <<'PY'
-from Modules.data.remote_download import RetailChainsDownloadManager
-
-manager = RetailChainsDownloadManager()
-result = manager.download_chains(
-    target_root='data/raw/downloads',
-    chains=['HAZI_HINAM'],
-)
-print('success=', result.success)
-print(manager.render_report(result))
-PY
-```
-
-### 1.5 Download only selected file types
-
-```bash
-python - <<'PY'
-from Modules.data.remote_download import RetailChainsDownloadManager
-
-manager = RetailChainsDownloadManager()
-result = manager.download_chains(
-    target_root='data/raw/downloads',
-    file_types=['STORE_FILE', 'PRICE_FULL_FILE'],
-)
-print('success=', result.success)
-print(manager.render_report(result))
-PY
-```
-
-### 1.6 Constrained download (safer default for regular runs)
+### 1.2 Constrained download (recommended default)
 
 ```bash
 python - <<'PY'
@@ -100,41 +42,7 @@ print(manager.render_report(result))
 PY
 ```
 
-### 1.7 Cleanup target chain folder before download
-
-```bash
-python - <<'PY'
-from Modules.data.remote_download import RetailChainsDownloadManager
-
-manager = RetailChainsDownloadManager()
-result = manager.download_chains(
-    target_root='data/raw/downloads',
-    chains=['HAZI_HINAM'],
-    file_types=['STORE_FILE'],
-    cleanup_before_download=True,
-)
-print('success=', result.success)
-print(manager.render_report(result))
-PY
-```
-
-### 1.8 Download and print report only (quick diagnostic)
-
-```bash
-python - <<'PY'
-from Modules.data.remote_download import RetailChainsDownloadManager
-
-manager = RetailChainsDownloadManager()
-result = manager.download_chains(
-    target_root='data/raw/downloads',
-    chains=['SHUFERSAL', 'HAZI_HINAM'],
-    limit=5,
-)
-print(manager.render_report(result))
-PY
-```
-
-> Note: this step downloads raw retailer files only. Parsing/loading XML/GZ files into SQLite is a separate step.
+> Note: this downloads raw files only. Importing into SQLite is a separate step.
 
 ## 2) Reset the local example database
 
@@ -142,9 +50,9 @@ PY
 python -c "from pathlib import Path; Path('/tmp/smart_basket_run_examples.sqlite').unlink(missing_ok=True)"
 ```
 
-## 3) Load sample data into a local SQLite database
+## 3) Load deterministic fixture data into local SQLite
 
-The first load command initializes the database schema at `--db-path` if the file does not exist yet.
+The first load command initializes schema at `--db-path` if needed.
 
 ```bash
 python -m Modules.app.cli --db-path /tmp/smart_basket_run_examples.sqlite load products tests/fixtures/import_products.csv --mode replace
@@ -160,19 +68,25 @@ python -m Modules.app.cli --db-path /tmp/smart_basket_run_examples.sqlite add-it
 python -m Modules.app.cli --db-path /tmp/smart_basket_run_examples.sqlite add-item 1 'Unknown Snack' --input-type name --quantity 1
 ```
 
-## 5) Compare a basket
+## 5) Compare basket
 
 ```bash
 python -m Modules.app.cli --db-path /tmp/smart_basket_run_examples.sqlite compare 1
 ```
 
-## 6) Run downloader unit tests only
+## 6) Check raw-data hygiene before commit
+
+```bash
+git status --short
+```
+
+## 7) Run downloader unit tests only
 
 ```bash
 python -m unittest tests.unit.test_remote_download -v
 ```
 
-## 7) Run the full unittest suite
+## 8) Run the full unittest suite
 
 ```bash
 python -m unittest discover -s tests -p 'test_*.py' -v

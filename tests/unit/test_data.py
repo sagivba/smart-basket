@@ -218,6 +218,20 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertEqual(errors.errors[0].row_number, 2)
         self.assertEqual(errors.errors[0].field_name, "barcode")
 
+    def test_parse_products_file_normalizes_decimal_barcode_text(self) -> None:
+        file_path = self._write_temp_file(
+            ".csv",
+            "barcode,product_name,brand,unit_name\n7290012345678.0,Milk 1L,DairyCo,1L\n",
+        )
+
+        records, summary, errors = parse_products_file(file_path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].barcode, "7290012345678")
+        self.assertEqual(summary.accepted_rows, 1)
+        self.assertEqual(summary.rejected_rows, 0)
+        self.assertTrue(errors.is_empty())
+
     def test_parse_prices_file_tracks_invalid_row(self) -> None:
         file_path = self._fixture_path("prices_invalid_store.json")
 

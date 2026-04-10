@@ -86,6 +86,9 @@ def create_schema(connection: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_prices_store_id
             ON prices(store_id);
 
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_prices_natural_key
+            ON prices(product_id, chain_id, store_id, currency, price_date);
+
         CREATE INDEX IF NOT EXISTS idx_basket_items_basket_id
             ON basket_items(basket_id);
 

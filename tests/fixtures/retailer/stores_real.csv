@@ -1,0 +1,4 @@
+chain_code,chain_name,store_code,store_name,city,address,is_active,subchain
+7290058,Shufersal,001,Shufersal Dizengoff,Tel Aviv,Dizengoff 1,1,Deal
+7290058,Shufersal,002,Shufersal Haifa,Haifa,Herzl 20,1,Sheli
+7290873,Hazi Hinam,010,Hazi Hinam Jerusalem,Jerusalem,Jaffa 8,0,Main

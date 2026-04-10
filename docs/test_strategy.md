@@ -222,6 +222,7 @@ Do not use:
 - load parsed records into SQLite
 - verify `replace` mode clears and reloads expected tables
 - verify `append` mode preserves existing valid rows where intended
+- verify repeated `append` imports keep price rows idempotent for the same natural key (`product_id`, `chain_id`, `store_id`, `currency`, `price_date`)
 - verify load result summary
 
 ### 8.4 Repositories

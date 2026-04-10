@@ -83,6 +83,7 @@ class TestConnectionFactoryAndSchema(unittest.TestCase):
                 "idx_stores_chain_id",
                 "idx_prices_product_chain",
                 "idx_prices_store_id",
+                "uq_prices_natural_key",
                 "idx_basket_items_basket_id",
                 "idx_basket_items_product_id",
             }
@@ -650,6 +651,53 @@ class TestDataImportRepository(unittest.TestCase):
 
         self.assertEqual(loaded_chain_id, chain_id)
         self.assertGreater(loaded_store_id, 0)
+
+    def test_insert_price_by_codes_is_idempotent_for_same_natural_key(self) -> None:
+        self.repository.upsert_product(
+            barcode="111",
+            name="Milk",
+            normalized_name="milk",
+            brand=None,
+            unit_name=None,
+        )
+        self.repository.upsert_store_with_chain(
+            chain_code="CH1",
+            chain_name="Chain One",
+            store_code="S1",
+            store_name="Store One",
+            city=None,
+            address=None,
+            is_active=True,
+        )
+
+        self.repository.insert_price_by_codes(
+            barcode="111",
+            chain_code="CH1",
+            store_code="S1",
+            price="10.00",
+            currency="ILS",
+            price_date="2026-04-10",
+            source_file="batch_1.csv",
+        )
+        self.repository.insert_price_by_codes(
+            barcode="111",
+            chain_code="CH1",
+            store_code="S1",
+            price="9.50",
+            currency="ILS",
+            price_date="2026-04-10",
+            source_file="batch_2.csv",
+        )
+
+        row = self.connection.execute(
+            """
+            SELECT COUNT(*), MIN(CAST(price AS REAL)), MAX(source_file)
+            FROM prices
+            """
+        ).fetchone()
+        self.assertEqual(row[0], 1)
+        self.assertEqual(row[1], 9.5)
+        self.assertEqual(row[2], "batch_2.csv")
 
 
 class TestPriceRepository(unittest.TestCase):

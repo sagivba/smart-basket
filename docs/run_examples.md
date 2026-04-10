@@ -28,33 +28,9 @@ PY
 ```
 
 > `render_report(...)` is safe to call for both successful and failed runs and always returns text output.
-
-Example rendered output (failure reasons visible per chain and file type):
-
-```text
-Download batch summary
-root=data/raw/downloads
-chains=SHUFERSAL,HAZI_HINAM
-attempts_success=0
-attempts_failed=6
-attempts_skipped=4
-files_downloaded=0
-overall_success=False
-
-Chain: SHUFERSAL
-- STORE_FILE: FAILED | reason=runtimeerror: timeout
-- PRICE_FILE: FAILED | reason=runtimeerror: timeout
-- PRICE_FULL_FILE: FAILED | reason=runtimeerror: timeout
-- PROMO_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: timeout
-- PROMO_FULL_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: timeout
-
-Chain: HAZI_HINAM
-- STORE_FILE: FAILED | reason=runtimeerror: network error
-- PRICE_FILE: FAILED | reason=runtimeerror: network error
-- PRICE_FULL_FILE: FAILED | reason=runtimeerror: network error
-- PROMO_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: network error
-- PROMO_FULL_FILE: SKIPPED | reason=chain initialization failed: runtimeerror: network error
-```
+Real runs may create nested folders such as:
+- `data/raw/downloads/shufersal/Shufersal/`
+- `data/raw/downloads/hazi_hinam/HaziHinam/`
 
 ### 1.3 Download raw files for Shufersal only
 
@@ -100,6 +76,60 @@ result = manager.download_chains(
     file_types=['STORE_FILE', 'PRICE_FULL_FILE'],
 )
 print('success=', result.success)
+print(manager.render_report(result))
+PY
+```
+
+### 1.6 Constrained download (safer default for regular runs)
+
+```bash
+python - <<'PY'
+from datetime import date
+from Modules.data.remote_download import RetailChainsDownloadManager
+
+manager = RetailChainsDownloadManager()
+result = manager.download_chains(
+    target_root='data/raw/downloads',
+    chains=['SHUFERSAL'],
+    file_types=['STORE_FILE', 'PRICE_FILE'],
+    when_date=date(2026, 1, 15),
+    limit=25,
+)
+print('success=', result.success)
+print(manager.render_report(result))
+PY
+```
+
+### 1.7 Cleanup target chain folder before download
+
+```bash
+python - <<'PY'
+from Modules.data.remote_download import RetailChainsDownloadManager
+
+manager = RetailChainsDownloadManager()
+result = manager.download_chains(
+    target_root='data/raw/downloads',
+    chains=['HAZI_HINAM'],
+    file_types=['STORE_FILE'],
+    cleanup_before_download=True,
+)
+print('success=', result.success)
+print(manager.render_report(result))
+PY
+```
+
+### 1.8 Download and print report only (quick diagnostic)
+
+```bash
+python - <<'PY'
+from Modules.data.remote_download import RetailChainsDownloadManager
+
+manager = RetailChainsDownloadManager()
+result = manager.download_chains(
+    target_root='data/raw/downloads',
+    chains=['SHUFERSAL', 'HAZI_HINAM'],
+    limit=5,
+)
 print(manager.render_report(result))
 PY
 ```

@@ -7,6 +7,7 @@ from enum import Enum
 from datetime import date, datetime
 import importlib
 from pathlib import Path
+import shutil
 from typing import Any
 
 
@@ -77,8 +78,12 @@ class ChainDownloadResult:
     chain_name: str
     success: bool
     requested_file_types: list[str]
+    output_directory: Path
     attempts: list[FileDownloadAttempt] = field(default_factory=list)
     downloaded_files: list[Path] = field(default_factory=list)
+    file_count: int = 0
+    total_bytes: int = 0
+    status: str = "FAILED"
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -111,6 +116,8 @@ class RetailChainsDownloadManager:
         file_types: list[str] | tuple[str, ...] | None = None,
         when_date: date | datetime | None = None,
         limit: int | None = None,
+        cleanup_before_download: bool = False,
+        strict_success: bool = False,
     ) -> DownloadBatchResult:
         """Download requested file categories for requested supported chains."""
         started_at = datetime.utcnow()
@@ -164,7 +171,12 @@ class RetailChainsDownloadManager:
                 when_date=when_date,
                 limit=limit,
             )
-            chain_result = self._download_chain(package_api=package_api, request=chain_request)
+            chain_result = self._download_chain(
+                package_api=package_api,
+                request=chain_request,
+                cleanup_before_download=cleanup_before_download,
+                strict_success=strict_success,
+            )
             chain_results.append(chain_result)
             batch_errors.extend(chain_result.errors)
             batch_warnings.extend(chain_result.warnings)
@@ -188,7 +200,7 @@ class RetailChainsDownloadManager:
             for attempt in chain_result.attempts
             if attempt.status == AttemptStatus.SKIPPED
         )
-        total_files_downloaded = sum(len(chain_result.downloaded_files) for chain_result in chain_results)
+        total_files_downloaded = sum(chain_result.file_count for chain_result in chain_results)
 
         return DownloadBatchResult(
             requested_chains=resolved_chains,
@@ -200,7 +212,7 @@ class RetailChainsDownloadManager:
             total_successful_attempts=total_successful_attempts,
             total_failed_attempts=total_failed_attempts,
             total_skipped_attempts=total_skipped_attempts,
-            success=(total_failed_attempts == 0 and not batch_errors),
+            success=all(chain_result.success for chain_result in chain_results),
             warnings=batch_warnings,
             errors=batch_errors,
         )
@@ -222,6 +234,12 @@ class RetailChainsDownloadManager:
             for chain_result in batch_result.chain_results:
                 lines.append("")
                 lines.append(f"Chain: {self._normalize_chain_name(chain_result.chain_name)}")
+                lines.append(f"- output_directory={self._safe_str(chain_result.output_directory)}")
+                lines.append(f"- file_count={chain_result.file_count}")
+                lines.append(f"- total_bytes={chain_result.total_bytes}")
+                lines.append(f"- status={chain_result.status}")
+                sample_paths = ", ".join(self._safe_str(path) for path in chain_result.downloaded_files[:5]) or "none"
+                lines.append(f"- sample_files={sample_paths}")
                 for attempt in chain_result.attempts:
                     status_text = self._normalize_attempt_status(attempt.status)
                     line = f"- {self._normalize_file_type_name(attempt.file_type)}: {status_text}"
@@ -236,6 +254,8 @@ class RetailChainsDownloadManager:
                     lines.append(line)
                 for warning in chain_result.warnings:
                     lines.append(f"- WARNING: {self._safe_str(warning)}")
+                for error in chain_result.errors:
+                    lines.append(f"- ERROR: {self._safe_str(error)}")
             return "\n".join(lines)
         except Exception as exc:  # pragma: no cover - defensive fallback
             return (
@@ -295,6 +315,8 @@ class RetailChainsDownloadManager:
         *,
         package_api: dict[str, Any],
         request: ChainDownloadRequest,
+        cleanup_before_download: bool,
+        strict_success: bool,
     ) -> ChainDownloadResult:
         attempts: list[FileDownloadAttempt] = []
         downloaded_files: list[Path] = []
@@ -303,6 +325,8 @@ class RetailChainsDownloadManager:
 
         try:
             request.target_directory.mkdir(parents=True, exist_ok=True)
+            if cleanup_before_download:
+                self._cleanup_target_directory(request.target_directory)
         except Exception as exc:
             return self._build_chain_init_failure_result(
                 chain_name=request.chain_name,
@@ -399,15 +423,35 @@ class RetailChainsDownloadManager:
                     f"{failure_attempt.chain_name} {failure_attempt.file_type}: {failure_attempt.failure_reason}"
                 )
 
+        actual_files = self._list_files(request.target_directory)
+        downloaded_files = sorted(actual_files)
+        total_bytes = sum(path.stat().st_size for path in downloaded_files if path.exists())
         if not downloaded_files:
             warnings.append(f"{self._normalize_chain_name(request.chain_name)}: no files downloaded")
-
+        failed_attempts = [attempt for attempt in attempts if attempt.status == AttemptStatus.FAILED]
+        if strict_success:
+            success = bool(attempts) and not failed_attempts and bool(downloaded_files)
+        else:
+            success = bool(downloaded_files)
+            if success and failed_attempts:
+                warnings.append(
+                    f"{self._normalize_chain_name(request.chain_name)}: files exist on disk despite failed attempts"
+                )
+        status = "FAILED"
+        if success and (warnings or errors or failed_attempts):
+            status = "SUCCESS_WITH_WARNINGS"
+        elif success:
+            status = "SUCCESS"
         return ChainDownloadResult(
             chain_name=self._normalize_chain_name(request.chain_name),
-            success=all(attempt.status == AttemptStatus.SUCCESS for attempt in attempts if attempt.file_type in {self._normalize_file_type_name(f) for f in request.file_types}) if attempts else False,
+            success=success,
             requested_file_types=[self._normalize_file_type_name(f) for f in request.file_types],
+            output_directory=request.target_directory,
             attempts=attempts,
-            downloaded_files=sorted(downloaded_files),
+            downloaded_files=downloaded_files,
+            file_count=len(downloaded_files),
+            total_bytes=total_bytes,
+            status=status,
             warnings=warnings,
             errors=errors,
         )
@@ -457,8 +501,12 @@ class RetailChainsDownloadManager:
             chain_name=normalized_chain,
             success=False,
             requested_file_types=normalized_file_types,
+            output_directory=target_directory,
             attempts=attempts,
             downloaded_files=[],
+            file_count=0,
+            total_bytes=0,
+            status="FAILED",
             warnings=[f"{normalized_chain}: no files downloaded"],
             errors=[f"{normalized_chain} CHAIN_INIT: {normalized_reason}"],
         )
@@ -597,6 +645,19 @@ class RetailChainsDownloadManager:
             return []
         return sorted(path for path in target_directory.rglob("*") if path.is_file())
 
+    @staticmethod
+    def _cleanup_target_directory(target_directory: Path) -> None:
+        resolved = target_directory.resolve()
+        if resolved == Path(resolved.anchor):
+            raise ValueError("refusing to clean filesystem root")
+        if not target_directory.exists():
+            return
+        for child in target_directory.iterdir():
+            if child.is_file() or child.is_symlink():
+                child.unlink()
+            else:
+                shutil.rmtree(child)
+
 
 class RetailerTransparencyDownloader:
     """Backward-compatible façade kept for existing call sites."""
@@ -611,6 +672,8 @@ class RetailerTransparencyDownloader:
         file_types: list[str] | tuple[str, ...] | None = None,
         when_date: date | datetime | None = None,
         limit: int | None = None,
+        cleanup_before_download: bool = False,
+        strict_success: bool = False,
         include_store_files: bool | None = None,
         prefer_full_price_files: bool | None = None,
     ) -> DownloadBatchResult:
@@ -629,6 +692,8 @@ class RetailerTransparencyDownloader:
             file_types=resolved_file_types,
             when_date=when_date,
             limit=limit,
+            cleanup_before_download=cleanup_before_download,
+            strict_success=strict_success,
         )
 
     def render_report(self, batch_result: DownloadBatchResult) -> str:
@@ -657,6 +722,8 @@ def download_all_supported_chains(
     file_types: list[str] | tuple[str, ...] | None = None,
     when_date: date | datetime | None = None,
     limit: int | None = None,
+    cleanup_before_download: bool = False,
+    strict_success: bool = False,
 ) -> DownloadBatchResult:
     """Convenience API for one-call download execution."""
     return RetailChainsDownloadManager().download_chains(
@@ -665,4 +732,6 @@ def download_all_supported_chains(
         file_types=file_types,
         when_date=when_date,
         limit=limit,
+        cleanup_before_download=cleanup_before_download,
+        strict_success=strict_success,
     )

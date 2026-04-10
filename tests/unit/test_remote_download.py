@@ -5,6 +5,7 @@ from __future__ import annotations
 import tempfile
 import types
 import unittest
+from datetime import date
 from enum import Enum
 from pathlib import Path
 from unittest.mock import patch
@@ -23,7 +24,7 @@ class _FakeScarpingTask:
         self.kwargs = kwargs
 
     def start(self, limit=None, when_date=None, single_pass=True):
-        _ = (limit, when_date, single_pass)
+        self.start_kwargs = {"limit": limit, "when_date": when_date, "single_pass": single_pass}
 
     def join(self):
         chain_name = self.kwargs["enabled_scrapers"][0]
@@ -33,8 +34,10 @@ class _FakeScarpingTask:
             raise RuntimeError(action.split(":", 1)[1])
         if action == "empty":
             return
-
         base = Path(self.kwargs["output_configuration"]["base_storage_path"])
+        if action == "nested":
+            base = base / self.kwargs["enabled_scrapers"][0].title().replace("_", "")
+            base.mkdir(parents=True, exist_ok=True)
         file_name = f"{chain_name}_{file_type}.xml"
         (base / file_name).write_text("ok", encoding="utf-8")
 
@@ -182,7 +185,7 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir, _patch_imports(behavior):
             result = manager.download_chains(target_root=temp_dir, chains=["SHUFERSAL"])
 
-        self.assertFalse(result.success)
+        self.assertTrue(result.success)
         self.assertEqual(result.total_failed_attempts, 2)
         self.assertEqual(result.total_skipped_attempts, 0)
         attempts = result.chain_results[0].attempts
@@ -224,8 +227,11 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
 
         self.assertIn("Download batch summary", report)
         self.assertIn("Chain: HAZI_HINAM", report)
-        self.assertIn("- PROMO_FULL_FILE: FAILED | reason=no files returned by upstream scraper", report)
-        self.assertIn("- STORE_FILE: SUCCESS | paths=", report)
+        self.assertIn("- output_directory=", report)
+        self.assertIn("- file_count=", report)
+        self.assertIn("- total_bytes=", report)
+        self.assertIn("- status=", report)
+        self.assertIn("- sample_files=", report)
 
     def test_render_report_never_crashes_with_unexpected_values(self) -> None:
         manager = RetailChainsDownloadManager()
@@ -349,6 +355,86 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
             self.assertTrue(hazi_hinam_dir.exists())
             all_paths = [path for chain in result.chain_results for path in chain.downloaded_files]
             self.assertTrue(all(str(path).startswith(str(shufersal_dir)) or str(path).startswith(str(hazi_hinam_dir)) for path in all_paths))
+
+    def test_success_inferred_from_existing_files_on_disk_non_strict(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports({("SHUFERSAL", "STORE_FILE"): "empty"}):
+            existing_dir = Path(temp_dir) / "shufersal" / "Shufersal"
+            existing_dir.mkdir(parents=True, exist_ok=True)
+            existing_file = existing_dir / "existing.xml"
+            existing_file.write_text("already here", encoding="utf-8")
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL"],
+                file_types=["STORE_FILE"],
+                strict_success=False,
+            )
+
+        chain_result = result.chain_results[0]
+        self.assertTrue(chain_result.success)
+        self.assertEqual(chain_result.status, "SUCCESS_WITH_WARNINGS")
+        self.assertIn(existing_file, chain_result.downloaded_files)
+
+    def test_nested_output_folder_detection(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports({("SHUFERSAL", "STORE_FILE"): "nested"}):
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL"],
+                file_types=["STORE_FILE"],
+            )
+        chain_result = result.chain_results[0]
+        self.assertTrue(chain_result.success)
+        self.assertEqual(chain_result.file_count, 1)
+        self.assertIn("Shufersal", str(chain_result.downloaded_files[0]))
+
+    def test_constrained_download_parameters_passed_to_task(self) -> None:
+        captured: list[dict[str, object]] = []
+
+        class _CaptureTask(_FakeScarpingTask):
+            def start(self, limit=None, when_date=None, single_pass=True):
+                super().start(limit=limit, when_date=when_date, single_pass=single_pass)
+                captured.append(self.start_kwargs)
+
+        def fake_import(name: str):
+            if name == "il_supermarket_scarper":
+                return types.SimpleNamespace(ScarpingTask=lambda **kwargs: _CaptureTask(behavior={}, **kwargs))
+            if name == "il_supermarket_scarper.scrappers_factory":
+                return types.SimpleNamespace(ScraperFactory=types.SimpleNamespace(SHUFERSAL="SHUFERSAL"))
+            if name == "il_supermarket_scarper.utils.file_types":
+                return types.SimpleNamespace(FileTypesFilters=types.SimpleNamespace(STORE_FILE="STORE_FILE"))
+            raise ImportError(name)
+
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir, patch(
+            "Modules.data.remote_download.importlib.import_module",
+            side_effect=fake_import,
+        ):
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL"],
+                file_types=["STORE_FILE"],
+                limit=5,
+                when_date=date(2026, 1, 15),
+            )
+        self.assertTrue(result.success)
+        self.assertEqual(captured[0]["limit"], 5)
+        self.assertEqual(captured[0]["when_date"], date(2026, 1, 15))
+
+    def test_cleanup_before_download_removes_old_files(self) -> None:
+        manager = RetailChainsDownloadManager()
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports({("SHUFERSAL", "STORE_FILE"): "nested"}):
+            stale = Path(temp_dir) / "shufersal" / "stale.txt"
+            stale.parent.mkdir(parents=True, exist_ok=True)
+            stale.write_text("old", encoding="utf-8")
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL"],
+                file_types=["STORE_FILE"],
+                cleanup_before_download=True,
+            )
+        self.assertTrue(result.success)
+        self.assertFalse(stale.exists())
 
 
 if __name__ == "__main__":

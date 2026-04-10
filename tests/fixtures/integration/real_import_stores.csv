@@ -1,0 +1,5 @@
+chain_code,chain_name,store_code,store_name,city,address,is_active
+CHAIN_SHUF,Shuf Market,SHUF_MAIN,Shuf Market Main,Tel Aviv,Herzl 10,true
+CHAIN_SHUF,Shuf Market,SHUF_NORTH,Shuf Market North,Haifa,Galil 5,true
+CHAIN_RAMI,Rami Value,RAMI_MAIN,Rami Value Main,Jerusalem,Jaffa 3,true
+CHAIN_RAMI,Rami Value,RAMI_SOUTH,Rami Value South,Beer Sheva,Negev 18,true

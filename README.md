@@ -39,6 +39,7 @@ Status labels used here:
 - Engine result-building logic for chain-level basket outputs in `Modules/engine.basket_engine` with unit + integration coverage.
 - Application-layer orchestration (`ApplicationService` and use-cases) in `Modules/app.application_service` with unit coverage.
 - Integration tests for import flow and basket comparison result-building.
+- Optional retailer transparency-file downloader integration through `Modules/data/remote_download.py`.
 
 ### Partial
 
@@ -52,7 +53,6 @@ Status labels used here:
 
 ### Missing
 
-- CLI entry point and user-facing commands are **not implemented** yet.
 - No web UI, no backend/API, no auth/user management.
 - No remote synchronization.
 
@@ -108,7 +108,7 @@ source .venv/bin/activate
 
 ### 3) Install dependencies
 
-This repository keeps dependencies minimal. It currently includes `il-supermarket-scraper` for the optional raw transparency-file downloader integration.
+This repository keeps dependencies minimal. It currently includes `il-supermarket-scraper` for **optional** raw transparency-file downloading.
 
 ```bash
 python -m pip install -r requirements.txt
@@ -116,19 +116,39 @@ python -m pip install -r requirements.txt
 
 ---
 
+## Real local workflow (download -> import -> compare)
+
+Use this sequence for realistic local development:
+
+1. **(Optional) Download raw retailer transparency files** into `data/raw/downloads/` using the Python API.
+2. **Import local source files** into SQLite (`products`, `stores`, `prices`) using `python -m Modules.app.cli load ...`.
+3. **Build basket state** with `add-item` commands.
+4. **Run comparison** with `python -m Modules.app.cli compare <basket_id>`.
+
+For copy-paste command examples, see `docs/run_examples.md`.
+
+For retailer-file details (supported chains, file categories, hygiene, and boundaries), see `docs/retailer_files.md`.
+
+### Raw-data hygiene (important)
+
+- Raw retailer files under `data/raw/` are local working inputs and are **not meant to be committed**.
+- `.gitignore` already excludes `data/raw/*` while preserving `data/raw/.gitkeep`.
+- Keep raw downloads on your machine only; commit deterministic fixtures/samples instead.
+
+---
+
 ## Run / usage (current state)
 
 A basic CLI entry point is available via `python -m Modules.app.cli`.
 
-Current usage is module-driven (import/use in Python) and test-driven. The most reliable executable flows today are:
+Current CLI commands include:
+- `load` for importing local products/stores/prices files.
+- `add-item` for adding basket items.
+- `compare` for chain-level comparison output.
 
-For copy-paste CLI commands against repository fixtures, see `docs/run_examples.md`.
+> Note: retailer downloading is currently available through Python API collaborators (not a dedicated CLI command).
 
-1. Data import flow (integration-tested).
-2. Basket comparison result-building flow (integration-tested).
-3. Application service/use-case orchestration (unit-tested).
-
-### Run the integration flows directly via unittest
+### Run integration flows directly via unittest
 
 ```bash
 python -m unittest tests.integration.test_import_flow -v
@@ -152,23 +172,18 @@ python -m unittest discover -s tests -p "test_*.py" -v
 
 ---
 
-## What this README intentionally does not claim
-
-To keep documentation accurate, this README does **not** claim:
-- a finished CLI,
-- completed end-to-end comparison-service orchestration beyond what tests currently verify,
-- any backend/API/web runtime,
-- any non-local execution dependency.
-
-
-## Third-party attribution
+## External dependency boundary (retailer downloader)
 
 This repository includes an **optional** raw-download integration that depends on:
 
 - `il-supermarket-scraper` from OpenIsraeliSupermarkets / `israeli-supermarket-scarpers`
 - OpenIsraeliSupermarkets / `israeli-supermarket-parsers`
 
-The current integration uses the scraper package to download raw supermarket transparency files for selected chains into local folders. Parsing/loading downloaded XML/GZ files into this project's SQLite schema is a **separate step** and is not part of the downloader capability itself.
+Boundary rules:
+- The external dependency is used only to fetch raw transparency files to local disk.
+- Parsing/loading those files into this project database is a separate local import step.
+- Basket comparison logic must not depend on live network access.
+- Tests should continue to run offline without downloader calls.
 
 ### Licensing note (third-party dependency)
 

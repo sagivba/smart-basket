@@ -9,6 +9,7 @@ Checked modules and tests for evidence of separation between:
 - DB access/persistence (`Modules/db/*`)
 - business logic (`Modules/engine/*`)
 - application orchestration (`Modules/app/*`)
+- optional downloader integration boundaries (`Modules/data/remote_download.py`)
 
 Evidence was taken from implementation files and current `unittest` coverage only.
 
@@ -26,10 +27,14 @@ Evidence was taken from implementation files and current `unittest` coverage onl
 
 Implemented:
 - Parsing is isolated in `parser.py` with format detection, row normalization, validation, and structured parse errors.
+- Optional remote downloader integration is isolated in `remote_download.py` and focused on raw-file retrieval.
 
 Boundary concern:
 - `PriceDataLoader` writes directly to SQLite and performs SQL lookups/upserts (`INSERT`, `DELETE`, `SELECT`) instead of delegating persistence to DB repositories.
 - This conflicts with the system spec expectation that DB layer owns persistence/query logic while data layer passes cleaned records forward.
+
+Boundary note:
+- Downloader responsibilities stop at local raw-file download. Import parsing/loading remains a separate flow.
 
 ### Modules/db
 **Status: Partial**
@@ -74,6 +79,12 @@ Implemented:
 Implemented:
 - Text normalization and validation helpers are isolated and used by parsing/validation flows.
 
+## External dependency boundary summary
+
+- `il-supermarket-scraper` is an optional dependency used by the data-layer downloader only.
+- Import (`load ...`), DB persistence, and engine comparison are separate local flows.
+- Offline/local determinism requirements for tests still apply.
+
 ## Consolidated separation verdict
 
 **Overall verdict: Partial**.
@@ -81,7 +92,8 @@ Implemented:
 Clean separations are present for:
 - engine vs file parsing,
 - app vs SQL/parsing,
-- models/utils vs infrastructure.
+- models/utils vs infrastructure,
+- downloader vs importer/comparison logic.
 
 A clear, evidence-backed boundary violation remains:
 - data layer currently contains direct persistence/query SQL that should reside in DB repositories.

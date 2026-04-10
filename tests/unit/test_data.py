@@ -265,6 +265,74 @@ class TestProductAndPriceFileParsing(unittest.TestCase):
         self.assertEqual(errors.count, 1)
         self.assertEqual(errors.errors[0].field_name, "chain_name")
 
+    def test_parse_products_file_normalizes_barcode_with_separators(self) -> None:
+        file_path = self._write_temp_file(
+            ".csv",
+            "barcode,product_name\n7290-0123 45678,Milk 1L\n",
+        )
+
+        records, summary, errors = parse_products_file(file_path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].barcode, "7290012345678")
+        self.assertEqual(summary.accepted_rows, 1)
+        self.assertEqual(summary.rejected_rows, 0)
+        self.assertTrue(errors.is_empty())
+
+    def test_parse_stores_file_normalizes_external_code_aliases(self) -> None:
+        file_path = self._write_temp_file(
+            ".csv",
+            "chain,store,name,chain_name\n ch 01 , st-10 , Downtown , Chain One\n",
+        )
+
+        records, summary, errors = parse_stores_file(file_path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].chain_code, "CH 01")
+        self.assertEqual(records[0].store_code, "ST-10")
+        self.assertEqual(records[0].store_name, "Downtown")
+        self.assertEqual(summary.accepted_rows, 1)
+        self.assertTrue(errors.is_empty())
+
+    def test_parse_prices_file_normalizes_price_date_formats(self) -> None:
+        file_path = self._write_temp_file(
+            ".json",
+            """[
+                {
+                    "chain_code": "ch01",
+                    "store_code": "st10",
+                    "barcode": "7290012345678",
+                    "price": "12.50",
+                    "currency": "ils",
+                    "date": "09/04/2026"
+                }
+            ]""",
+        )
+
+        records, summary, errors = parse_prices_file(file_path)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].chain_code, "CH01")
+        self.assertEqual(records[0].store_code, "ST10")
+        self.assertEqual(records[0].currency, "ILS")
+        self.assertEqual(records[0].price_date_text, "2026-04-09")
+        self.assertEqual(summary.accepted_rows, 1)
+        self.assertTrue(errors.is_empty())
+
+    def test_parse_prices_file_rejects_unsupported_date_format(self) -> None:
+        file_path = self._write_temp_file(
+            ".csv",
+            "chain_code,store_code,barcode,price,currency,price_date\nCH01,ST10,7290012345678,12.50,ILS,2026.04.09\n",
+        )
+
+        records, summary, errors = parse_prices_file(file_path)
+
+        self.assertEqual(records, [])
+        self.assertEqual(summary.accepted_rows, 0)
+        self.assertEqual(summary.rejected_rows, 1)
+        self.assertEqual(errors.count, 1)
+        self.assertEqual(errors.errors[0].field_name, "price_date")
+
 
 class TestPriceDataLoader(unittest.TestCase):
     def setUp(self) -> None:

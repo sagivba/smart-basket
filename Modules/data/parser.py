@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -175,6 +176,37 @@ def _normalize_row(raw_row: dict[str, Any]) -> dict[str, Any]:
     return {normalize_whitespace(str(key)).lower(): value for key, value in raw_row.items()}
 
 
+def _normalize_barcode_value(value: str) -> str:
+    """Normalize common barcode separators before strict validation."""
+    return "".join(character for character in value if character.isdigit())
+
+
+def _normalize_code_value(value: str) -> str:
+    """Normalize retailer chain/store code text to a stable uppercase key."""
+    return normalize_whitespace(value).upper()
+
+
+def _normalize_price_date_value(value: str) -> str:
+    """Normalize common source date representations to YYYY-MM-DD."""
+    normalized = normalize_whitespace(value)
+    known_formats = ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%Y%m%d")
+    for date_format in known_formats:
+        try:
+            parsed = datetime.strptime(normalized, date_format)
+            return parsed.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    if "T" in normalized:
+        try:
+            parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+            return parsed.date().isoformat()
+        except ValueError:
+            pass
+
+    raise ValueError("price_date must be a supported date format")
+
+
 def _read_rows(file_path: str | Path) -> tuple[FileFormat, list[tuple[int, dict[str, Any]]]]:
     """Read a supported file into a deterministic sequence of row dictionaries."""
     format_type = FileParser.detect_format(file_path)
@@ -256,7 +288,7 @@ def _build_product_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPro
         row_number=row_number,
     )
     try:
-        barcode = validate_barcode(barcode_text)
+        barcode = validate_barcode(_normalize_barcode_value(barcode_text))
     except (TypeError, ValueError) as exc:
         raise _RowValidationError("barcode", str(exc), barcode_text) from exc
 
@@ -282,17 +314,21 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
     """Build one validated ParsedPriceRecord from an input row."""
     row = _normalize_row(raw_row)
 
-    chain_code = _get_required_field(
-        row,
-        ("chain_code", "chain"),
-        target_field="chain_code",
-        row_number=row_number,
+    chain_code = _normalize_code_value(
+        _get_required_field(
+            row,
+            ("chain_code", "chain"),
+            target_field="chain_code",
+            row_number=row_number,
+        )
     )
-    store_code = _get_required_field(
-        row,
-        ("store_code", "store"),
-        target_field="store_code",
-        row_number=row_number,
+    store_code = _normalize_code_value(
+        _get_required_field(
+            row,
+            ("store_code", "store"),
+            target_field="store_code",
+            row_number=row_number,
+        )
     )
     barcode_text = _get_required_field(
         row,
@@ -301,7 +337,7 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
         row_number=row_number,
     )
     try:
-        barcode = validate_barcode(barcode_text)
+        barcode = validate_barcode(_normalize_barcode_value(barcode_text))
     except (TypeError, ValueError) as exc:
         raise _RowValidationError("barcode", str(exc), barcode_text) from exc
 
@@ -311,18 +347,25 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
         target_field="price",
         row_number=row_number,
     )
-    currency = _get_required_field(
-        row,
-        ("currency",),
-        target_field="currency",
-        row_number=row_number,
+    currency = _normalize_code_value(
+        _get_required_field(
+            row,
+            ("currency",),
+            target_field="currency",
+            row_number=row_number,
+        )
     )
+
     price_date_text = _get_required_field(
         row,
         ("price_date", "price_date_text", "date"),
         target_field="price_date",
         row_number=row_number,
     )
+    try:
+        normalized_price_date = _normalize_price_date_value(price_date_text)
+    except ValueError as exc:
+        raise _RowValidationError("price_date", str(exc), price_date_text) from exc
 
     return ParsedPriceRecord(
         source_row_number=row_number,
@@ -331,7 +374,7 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
         barcode=barcode,
         price_text=price_text,
         currency=currency,
-        price_date_text=price_date_text,
+        price_date_text=normalized_price_date,
     )
 
 
@@ -339,11 +382,13 @@ def _build_store_record(row_number: int, raw_row: dict[str, Any]) -> ParsedStore
     """Build one validated ParsedStoreRecord from an input row."""
     row = _normalize_row(raw_row)
 
-    chain_code = _get_required_field(
-        row,
-        ("chain_code", "chain"),
-        target_field="chain_code",
-        row_number=row_number,
+    chain_code = _normalize_code_value(
+        _get_required_field(
+            row,
+            ("chain_code", "chain"),
+            target_field="chain_code",
+            row_number=row_number,
+        )
     )
     chain_name = _get_required_field(
         row,
@@ -351,11 +396,13 @@ def _build_store_record(row_number: int, raw_row: dict[str, Any]) -> ParsedStore
         target_field="chain_name",
         row_number=row_number,
     )
-    store_code = _get_required_field(
-        row,
-        ("store_code", "store"),
-        target_field="store_code",
-        row_number=row_number,
+    store_code = _normalize_code_value(
+        _get_required_field(
+            row,
+            ("store_code", "store"),
+            target_field="store_code",
+            row_number=row_number,
+        )
     )
     store_name = _get_required_field(
         row,

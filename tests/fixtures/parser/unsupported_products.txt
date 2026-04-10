@@ -1,0 +1,2 @@
+barcode|product_name
+7290012345678|Milk 1L

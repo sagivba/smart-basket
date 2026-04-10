@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
+import xml.etree.ElementTree as ET
 
 from Modules.utils.text_utils import normalize_product_name, normalize_whitespace
 from Modules.utils.validators import validate_barcode, validate_required_text
@@ -19,6 +21,7 @@ class FileFormat(str, Enum):
 
     CSV = "csv"
     JSON = "json"
+    XML = "xml"
 
 
 class UnsupportedFileFormatError(ValueError):
@@ -130,18 +133,39 @@ class ParsingSummary:
         self.warnings.append(message)
 
 
+@dataclass(slots=True)
+class ParsingBatchSummary:
+    """Aggregate parsing outcomes for a deterministic file batch run."""
+
+    batch_name: str
+    file_count: int = 0
+    accepted_rows: int = 0
+    rejected_rows: int = 0
+    warnings: list[str] = field(default_factory=list)
+    file_summaries: list[ParsingSummary] = field(default_factory=list)
+
+    def add_file_summary(self, summary: ParsingSummary) -> None:
+        """Merge one per-file summary into this batch summary."""
+        self.file_count += 1
+        self.accepted_rows += summary.accepted_rows
+        self.rejected_rows += summary.rejected_rows
+        self.file_summaries.append(summary)
+        self.warnings.extend(summary.warnings)
+
+
 class FileParser:
     """Narrow helper APIs for file-format handling in concrete parsers."""
 
     _SUFFIX_TO_FORMAT: dict[str, FileFormat] = {
         ".csv": FileFormat.CSV,
         ".json": FileFormat.JSON,
+        ".xml": FileFormat.XML,
     }
 
     @classmethod
     def detect_format(cls, file_path: str | Path) -> FileFormat:
         """Detect supported file format from a file suffix."""
-        suffix = Path(file_path).suffix.lower()
+        suffix = _detect_effective_suffix(file_path)
         detected = cls._SUFFIX_TO_FORMAT.get(suffix)
         if detected is None:
             raise UnsupportedFileFormatError(f"unsupported file format: {suffix or '<none>'}")
@@ -176,35 +200,64 @@ def _normalize_row(raw_row: dict[str, Any]) -> dict[str, Any]:
     return {normalize_whitespace(str(key)).lower(): value for key, value in raw_row.items()}
 
 
-def _normalize_barcode_value(value: str) -> str:
-    """Normalize common barcode separators before strict validation."""
-    return "".join(character for character in value if character.isdigit())
+def _strip_xml_namespace(tag: str) -> str:
+    """Normalize XML tag names by removing optional namespaces."""
+    if "}" in tag:
+        tag = tag.split("}", maxsplit=1)[1]
+    return tag
 
 
-def _normalize_code_value(value: str) -> str:
-    """Normalize retailer chain/store code text to a stable uppercase key."""
-    return normalize_whitespace(value).upper()
+def _detect_effective_suffix(file_path: str | Path) -> str:
+    """Detect actual payload suffix, including .gz-wrapped payloads."""
+    path = Path(file_path)
+    suffix = path.suffix.lower()
+    if suffix != ".gz":
+        return suffix
+    return Path(path.stem).suffix.lower()
 
 
-def _normalize_price_date_value(value: str) -> str:
-    """Normalize common source date representations to YYYY-MM-DD."""
-    normalized = normalize_whitespace(value)
-    known_formats = ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%Y%m%d")
-    for date_format in known_formats:
-        try:
-            parsed = datetime.strptime(normalized, date_format)
-            return parsed.strftime("%Y-%m-%d")
-        except ValueError:
+def _open_text_file(file_path: str | Path):
+    """Open supported text payloads, including optional gzip compression."""
+    path = Path(file_path)
+    if path.suffix.lower() == ".gz":
+        return gzip.open(path, "rt", encoding="utf-8", newline="")
+    return path.open("r", encoding="utf-8", newline="")
+
+
+def _xml_row_to_dict(element: ET.Element) -> dict[str, str]:
+    """Convert one XML row element into a flat dict of direct children text."""
+    row: dict[str, str] = {}
+    for child in list(element):
+        key = normalize_whitespace(_strip_xml_namespace(child.tag)).lower()
+        value = normalize_whitespace(child.text or "")
+        row[key] = value
+    return row
+
+
+def _read_xml_rows(
+    file_path: str | Path,
+    *,
+    required_aliases: set[str],
+) -> list[tuple[int, dict[str, str]]]:
+    """Read XML rows that contain known aliases for target parser fields."""
+    try:
+        with _open_text_file(file_path) as xml_file:
+            root = ET.parse(xml_file).getroot()
+    except ET.ParseError as exc:
+        raise MalformedFileContentError("malformed XML content") from exc
+
+    rows: list[tuple[int, dict[str, str]]] = []
+    row_number = 1
+    for element in root.iter():
+        children = list(element)
+        if not children:
             continue
+        row = _xml_row_to_dict(element)
+        if required_aliases.intersection(row.keys()):
+            rows.append((row_number, row))
+            row_number += 1
 
-    if "T" in normalized:
-        try:
-            parsed = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
-            return parsed.date().isoformat()
-        except ValueError:
-            pass
-
-    raise ValueError("price_date must be a supported date format")
+    return rows
 
 
 def _read_rows(file_path: str | Path) -> tuple[FileFormat, list[tuple[int, dict[str, Any]]]]:
@@ -214,7 +267,7 @@ def _read_rows(file_path: str | Path) -> tuple[FileFormat, list[tuple[int, dict[
 
     if format_type == FileFormat.CSV:
         try:
-            with path.open("r", encoding="utf-8", newline="") as csv_file:
+            with _open_text_file(path) as csv_file:
                 reader = csv.DictReader(csv_file)
                 if reader.fieldnames is None:
                     raise MalformedFileContentError("CSV file must include a header row")
@@ -225,22 +278,38 @@ def _read_rows(file_path: str | Path) -> tuple[FileFormat, list[tuple[int, dict[
         except csv.Error as exc:
             raise MalformedFileContentError("malformed CSV content") from exc
 
-    try:
-        with path.open("r", encoding="utf-8") as json_file:
-            payload = json.load(json_file)
-    except json.JSONDecodeError as exc:
-        raise MalformedFileContentError("malformed JSON content") from exc
+    if format_type == FileFormat.JSON:
+        try:
+            with _open_text_file(path) as json_file:
+                payload = json.load(json_file)
+        except json.JSONDecodeError as exc:
+            raise MalformedFileContentError("malformed JSON content") from exc
 
-    if not isinstance(payload, list):
-        raise MalformedFileContentError("JSON content must be a list of row objects")
+        if not isinstance(payload, list):
+            raise MalformedFileContentError("JSON content must be a list of row objects")
 
-    rows: list[tuple[int, dict[str, Any]]] = []
-    for index, row in enumerate(payload, start=1):
-        if not isinstance(row, dict):
-            raise MalformedFileContentError("JSON rows must be objects")
-        rows.append((index, row))
+        rows: list[tuple[int, dict[str, Any]]] = []
+        for index, row in enumerate(payload, start=1):
+            if not isinstance(row, dict):
+                raise MalformedFileContentError("JSON rows must be objects")
+            rows.append((index, row))
+        return format_type, rows
 
-    return format_type, rows
+    return format_type, _read_xml_rows(
+        path,
+        required_aliases={
+            "chainid",
+            "chain_code",
+            "storeid",
+            "store_code",
+            "itemcode",
+            "barcode",
+            "price",
+            "itemprice",
+            "product_name",
+            "itemname",
+        },
+    )
 
 
 def _get_required_field(
@@ -314,25 +383,21 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
     """Build one validated ParsedPriceRecord from an input row."""
     row = _normalize_row(raw_row)
 
-    chain_code = _normalize_code_value(
-        _get_required_field(
-            row,
-            ("chain_code", "chain"),
-            target_field="chain_code",
-            row_number=row_number,
-        )
+    chain_code = _get_required_field(
+        row,
+        ("chain_code", "chain", "chainid"),
+        target_field="chain_code",
+        row_number=row_number,
     )
-    store_code = _normalize_code_value(
-        _get_required_field(
-            row,
-            ("store_code", "store"),
-            target_field="store_code",
-            row_number=row_number,
-        )
+    store_code = _get_required_field(
+        row,
+        ("store_code", "store", "storeid"),
+        target_field="store_code",
+        row_number=row_number,
     )
     barcode_text = _get_required_field(
         row,
-        ("barcode", "product_barcode"),
+        ("barcode", "product_barcode", "itemcode"),
         target_field="barcode",
         row_number=row_number,
     )
@@ -343,7 +408,7 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
 
     price_text = _get_required_field(
         row,
-        ("price", "price_text"),
+        ("price", "price_text", "itemprice"),
         target_field="price",
         row_number=row_number,
     )
@@ -358,7 +423,7 @@ def _build_price_record(row_number: int, raw_row: dict[str, Any]) -> ParsedPrice
 
     price_date_text = _get_required_field(
         row,
-        ("price_date", "price_date_text", "date"),
+        ("price_date", "price_date_text", "date", "pricedate", "updatedate"),
         target_field="price_date",
         row_number=row_number,
     )
@@ -382,31 +447,27 @@ def _build_store_record(row_number: int, raw_row: dict[str, Any]) -> ParsedStore
     """Build one validated ParsedStoreRecord from an input row."""
     row = _normalize_row(raw_row)
 
-    chain_code = _normalize_code_value(
-        _get_required_field(
-            row,
-            ("chain_code", "chain"),
-            target_field="chain_code",
-            row_number=row_number,
-        )
+    chain_code = _get_required_field(
+        row,
+        ("chain_code", "chain", "chainid"),
+        target_field="chain_code",
+        row_number=row_number,
     )
     chain_name = _get_required_field(
         row,
-        ("chain_name", "chain"),
+        ("chain_name", "chain", "chainname"),
         target_field="chain_name",
         row_number=row_number,
     )
-    store_code = _normalize_code_value(
-        _get_required_field(
-            row,
-            ("store_code", "store"),
-            target_field="store_code",
-            row_number=row_number,
-        )
+    store_code = _get_required_field(
+        row,
+        ("store_code", "store", "storeid"),
+        target_field="store_code",
+        row_number=row_number,
     )
     store_name = _get_required_field(
         row,
-        ("store_name", "name", "store"),
+        ("store_name", "name", "store", "storename"),
         target_field="store_name",
         row_number=row_number,
     )
@@ -417,10 +478,31 @@ def _build_store_record(row_number: int, raw_row: dict[str, Any]) -> ParsedStore
         chain_name=chain_name,
         store_code=store_code,
         store_name=store_name,
-        city=_get_optional_field(row, ("city",)),
+        city=_get_optional_field(row, ("city", "cityname")),
         address=_get_optional_field(row, ("address",)),
         is_active=_get_optional_field(row, ("is_active", "active")),
     )
+
+
+TRecord = TypeVar("TRecord")
+
+
+def _parse_file_batch(
+    file_paths: list[str | Path],
+    *,
+    parse_one: Callable[[str | Path], tuple[list[TRecord], ParsingSummary, ParsingErrorCollection]],
+    batch_name: str,
+) -> tuple[list[TRecord], ParsingBatchSummary, ParsingErrorCollection]:
+    """Parse a deterministic file batch and aggregate records + summary + errors."""
+    all_records: list[TRecord] = []
+    all_errors = FileParser.create_error_collection()
+    batch_summary = ParsingBatchSummary(batch_name=batch_name)
+    for raw_path in file_paths:
+        records, summary, errors = parse_one(raw_path)
+        all_records.extend(records)
+        all_errors.extend(errors.errors)
+        batch_summary.add_file_summary(summary)
+    return all_records, batch_summary, all_errors
 
 
 def parse_products_file(
@@ -502,3 +584,17 @@ def parse_stores_file(
             )
 
     return records, summary, errors
+
+
+def parse_prices_file_batch(
+    file_paths: list[str | Path],
+) -> tuple[list[ParsedPriceRecord], ParsingBatchSummary, ParsingErrorCollection]:
+    """Parse multiple price files and return one aggregate batch summary."""
+    return _parse_file_batch(file_paths, parse_one=parse_prices_file, batch_name="prices")
+
+
+def parse_stores_file_batch(
+    file_paths: list[str | Path],
+) -> tuple[list[ParsedStoreRecord], ParsingBatchSummary, ParsingErrorCollection]:
+    """Parse multiple store files and return one aggregate batch summary."""
+    return _parse_file_batch(file_paths, parse_one=parse_stores_file, batch_name="stores")

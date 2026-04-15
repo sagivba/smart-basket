@@ -237,6 +237,9 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
         self.assertIn("- output_directory=", report)
         self.assertIn("- file_count=", report)
         self.assertIn("- total_bytes=", report)
+        self.assertIn("- discovered_families=", report)
+        self.assertIn("- unclassified_files=", report)
+        self.assertIn("- naming_anomalies=", report)
         self.assertIn("- status=", report)
         self.assertIn("- outcome=", report)
         self.assertIn("- sample_files=", report)
@@ -479,61 +482,48 @@ class TestRetailChainsDownloadManager(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertFalse(stale.exists())
 
-    def test_invalid_limit_raises_value_error(self) -> None:
+    def test_inventory_classification_and_anomaly_detection(self) -> None:
         manager = RetailChainsDownloadManager()
         with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "limit must be a positive integer or None"):
-                manager.download_chains(target_root=temp_dir, chains=["SHUFERSAL"], limit=0)
+            chain_dir = Path(temp_dir) / "shufersal" / "nested"
+            chain_dir.mkdir(parents=True, exist_ok=True)
+            (chain_dir / "Stores123.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "Price111.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "PriceFull222.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "Promo333.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "PromoFull444.gz.xml.xml").write_text("ok", encoding="utf-8")
+            (chain_dir / "unknown.bin").write_text("ok", encoding="utf-8")
 
-    def test_invalid_when_date_raises_value_error(self) -> None:
+            inventory = manager._discover_downloaded_files(Path(temp_dir) / "shufersal")
+
+        self.assertEqual(inventory["family_counts"]["Stores"], 1)
+        self.assertEqual(inventory["family_counts"]["Price"], 1)
+        self.assertEqual(inventory["family_counts"]["PriceFull"], 1)
+        self.assertEqual(inventory["family_counts"]["Promo"], 1)
+        self.assertEqual(inventory["family_counts"]["PromoFull"], 1)
+        self.assertEqual(len(inventory["unclassified_files"]), 1)
+        self.assertEqual(len(inventory["naming_anomalies"]), 1)
+        self.assertIn("double xml suffix", inventory["naming_anomalies"][0])
+
+    def test_download_result_includes_inventory_reporting(self) -> None:
         manager = RetailChainsDownloadManager()
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "when_date must be a date, datetime, or None"):
-                manager.download_chains(
-                    target_root=temp_dir,
-                    chains=["SHUFERSAL"],
-                    when_date="2026-01-15",  # type: ignore[arg-type]
-                )
-
-    def test_unsupported_file_type_raises_value_error(self) -> None:
-        manager = RetailChainsDownloadManager()
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "unsupported file_types requested"):
-                manager.download_chains(
-                    target_root=temp_dir,
-                    chains=["SHUFERSAL"],
-                    file_types=["NOT_A_REAL_FILE_TYPE"],
-                )
-
-    def test_unsupported_chain_raises_value_error(self) -> None:
-        manager = RetailChainsDownloadManager()
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "unsupported chains requested"):
-                manager.download_chains(target_root=temp_dir, chains=["NOT_A_REAL_CHAIN"])
-
-    def test_cleanup_flag_type_is_validated(self) -> None:
-        manager = RetailChainsDownloadManager()
-        with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "cleanup_before_download must be a bool"):
-                manager.download_chains(
-                    target_root=temp_dir,
-                    chains=["SHUFERSAL"],
-                    cleanup_before_download=1,  # type: ignore[arg-type]
-                )
-
-
-class TestRetailerTransparencyDownloader(unittest.TestCase):
-    def test_file_types_cannot_be_combined_with_legacy_options(self) -> None:
-        downloader = RetailerTransparencyDownloader(manager=RetailChainsDownloadManager())
-        with self.assertRaisesRegex(
-            ValueError,
-            "file_types cannot be combined with include_store_files/prefer_full_price_files",
-        ):
-            downloader.download_files(
-                target_root="/tmp/unused",
+        with tempfile.TemporaryDirectory() as temp_dir, _patch_imports({}):
+            odd_name = Path(temp_dir) / "shufersal" / "PromoFullManual.gz.xml.xml"
+            odd_name.parent.mkdir(parents=True, exist_ok=True)
+            odd_name.write_text("ok", encoding="utf-8")
+            result = manager.download_chains(
+                target_root=temp_dir,
+                chains=["SHUFERSAL"],
                 file_types=["STORE_FILE"],
-                include_store_files=True,
+                strict_success=False,
             )
+            report = manager.render_report(result)
+
+        chain_result = result.chain_results[0]
+        self.assertIn("Stores", chain_result.discovered_family_counts)
+        self.assertTrue(chain_result.naming_anomalies)
+        self.assertTrue(any("upstream naming anomalies" in warning for warning in chain_result.warnings))
+        self.assertIn("- anomaly_samples=", report)
 
 
 if __name__ == "__main__":

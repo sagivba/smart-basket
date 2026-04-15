@@ -91,8 +91,10 @@ class ChainDownloadResult:
     downloaded_files: list[Path] = field(default_factory=list)
     file_count: int = 0
     total_bytes: int = 0
-    status: str = DownloadOutcome.FAILED.value
-    outcome: str = DownloadOutcome.FAILED.value
+    discovered_family_counts: dict[str, int] = field(default_factory=dict)
+    unclassified_files: list[Path] = field(default_factory=list)
+    naming_anomalies: list[str] = field(default_factory=list)
+    status: str = "FAILED"
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -295,10 +297,18 @@ class RetailChainsDownloadManager:
                 lines.append(f"- output_directory={self._safe_str(chain_result.output_directory)}")
                 lines.append(f"- file_count={chain_result.file_count}")
                 lines.append(f"- total_bytes={chain_result.total_bytes}")
-                lines.append(f"- status={self._normalize_outcome(getattr(chain_result, 'status', None))}")
-                lines.append(f"- outcome={self._normalize_outcome(getattr(chain_result, 'outcome', None))}")
+                families_text = ", ".join(
+                    f"{family}={count}" for family, count in sorted(chain_result.discovered_family_counts.items())
+                ) or "none"
+                lines.append(f"- discovered_families={families_text}")
+                lines.append(f"- unclassified_files={len(chain_result.unclassified_files)}")
+                lines.append(f"- naming_anomalies={len(chain_result.naming_anomalies)}")
+                lines.append(f"- status={chain_result.status}")
                 sample_paths = ", ".join(self._safe_str(path) for path in chain_result.downloaded_files[:5]) or "none"
                 lines.append(f"- sample_files={sample_paths}")
+                if chain_result.naming_anomalies:
+                    sample_anomaly = "; ".join(chain_result.naming_anomalies[:3])
+                    lines.append(f"- anomaly_samples={self._safe_str(sample_anomaly)}")
                 for attempt in chain_result.attempts:
                     status_text = self._normalize_attempt_status(attempt.status)
                     line = f"- {self._normalize_file_type_name(attempt.file_type)}: {status_text}"
@@ -482,9 +492,16 @@ class RetailChainsDownloadManager:
                     f"{failure_attempt.chain_name} {failure_attempt.file_type}: {failure_attempt.failure_reason}"
                 )
 
-        actual_files = self._list_files(request.target_directory)
-        downloaded_files = sorted(actual_files)
+        inventory = self._discover_downloaded_files(request.target_directory)
+        downloaded_files = list(inventory["all_files"])
         total_bytes = sum(path.stat().st_size for path in downloaded_files if path.exists())
+        if inventory["naming_anomalies"]:
+            warnings.append(
+                (
+                    f"{self._normalize_chain_name(request.chain_name)}: detected upstream naming anomalies "
+                    "(wrapper kept original names)"
+                )
+            )
         if not downloaded_files:
             warnings.append(f"{self._normalize_chain_name(request.chain_name)}: no files downloaded")
         failed_attempts = [attempt for attempt in attempts if attempt.status == AttemptStatus.FAILED]
@@ -514,8 +531,10 @@ class RetailChainsDownloadManager:
             downloaded_files=downloaded_files,
             file_count=len(downloaded_files),
             total_bytes=total_bytes,
-            status=chain_outcome.value,
-            outcome=chain_outcome.value,
+            discovered_family_counts=dict(inventory["family_counts"]),
+            unclassified_files=list(inventory["unclassified_files"]),
+            naming_anomalies=list(inventory["naming_anomalies"]),
+            status=status,
             warnings=warnings,
             errors=errors,
         )
@@ -570,8 +589,10 @@ class RetailChainsDownloadManager:
             downloaded_files=[],
             file_count=0,
             total_bytes=0,
-            status=DownloadOutcome.FAILED.value,
-            outcome=DownloadOutcome.FAILED.value,
+            discovered_family_counts={},
+            unclassified_files=[],
+            naming_anomalies=[],
+            status="FAILED",
             warnings=[f"{normalized_chain}: no files downloaded"],
             errors=[f"{normalized_chain} CHAIN_INIT: {normalized_reason}"],
         )
@@ -728,6 +749,50 @@ class RetailChainsDownloadManager:
         if not target_directory.exists():
             return []
         return sorted(path for path in target_directory.rglob("*") if path.is_file())
+
+    @classmethod
+    def _discover_downloaded_files(cls, target_directory: Path) -> dict[str, Any]:
+        all_files = cls._list_files(target_directory)
+        family_counts: dict[str, int] = {}
+        unclassified_files: list[Path] = []
+        naming_anomalies: list[str] = []
+        for path in all_files:
+            family = cls._classify_file_family(path.name)
+            if family is None:
+                unclassified_files.append(path)
+            else:
+                family_counts[family] = family_counts.get(family, 0) + 1
+            anomaly = cls._detect_naming_anomaly(path.name)
+            if anomaly is not None:
+                naming_anomalies.append(f"{path.name}: {anomaly}")
+        return {
+            "all_files": all_files,
+            "family_counts": family_counts,
+            "unclassified_files": unclassified_files,
+            "naming_anomalies": naming_anomalies,
+        }
+
+    @staticmethod
+    def _classify_file_family(file_name: str) -> str | None:
+        normalized = file_name.upper()
+        if "PRICEFULL" in normalized or "PRICE_FULL" in normalized:
+            return "PriceFull"
+        if "PROMOFULL" in normalized or "PROMO_FULL" in normalized:
+            return "PromoFull"
+        if "STORE" in normalized or "STORES" in normalized:
+            return "Stores"
+        if "PRICE" in normalized:
+            return "Price"
+        if "PROMO" in normalized:
+            return "Promo"
+        return None
+
+    @staticmethod
+    def _detect_naming_anomaly(file_name: str) -> str | None:
+        normalized = file_name.lower()
+        if normalized.endswith(".gz.xml.xml"):
+            return "double xml suffix after gz marker"
+        return None
 
     @staticmethod
     def _cleanup_target_directory(target_directory: Path) -> None:
